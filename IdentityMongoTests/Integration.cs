@@ -1,43 +1,20 @@
 ﻿using System.Security.Claims;
-using AspNetCore.Identity.MongoDriver;
 using AspNetCore.Identity.MongoDriver.Models;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.Extensions.DependencyInjection;
-using Mongo2Go;
-using MongoDB.Bson;
-using MongoDB.Bson.Serialization;
-using MongoDB.Bson.Serialization.Serializers;
+using Microsoft.Extensions.Options;
+using MongoDB.Driver.Linq;
 
 namespace IdentityMongoTests
 {
-    public class Integration : IDisposable
+    [Collection("Global Collection")]
+    public class Integration(GlobalFixture fixture)
     {
-        private readonly MongoDbRunner _runner = MongoDbRunner.Start();
-
-        private readonly UserManager<MongoUser<Guid>> _userManager;
-        private readonly RoleManager<MongoRole<Guid>> _roleManager;
-
-        public Integration()
-        {
-            BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
-            IServiceCollection services = new ServiceCollection();
-            services.AddLogging();
-            services.AddIdentityMongoDbProvider<MongoUser<Guid>, MongoRole<Guid>, Guid>(identity =>
-            {
-                identity.User.RequireUniqueEmail = true;
-            }, mongo =>
-            {
-                mongo.ConnectionString = _runner.ConnectionString;
-                mongo.DisableAutoMigrations = true;
-            });
-            IServiceProvider serviceProvider = services.BuildServiceProvider();
-            IServiceScope scope = serviceProvider.CreateScope();
-            _userManager = scope.ServiceProvider.GetService<UserManager<MongoUser<Guid>>>()!;
-            _roleManager = scope.ServiceProvider.GetService<RoleManager<MongoRole<Guid>>>()!;
-        }
+        private readonly UserManager<MongoUser<Guid>> _userManager = fixture.UserManager;
+        private readonly RoleManager<MongoRole<Guid>> _roleManager = fixture.RoleManager;
 
         [Fact]
-        public async Task Test_Create_User_With_Role()
+        public async Task UserManager_Tests()
         {
             string passwordHash = _userManager.PasswordHasher.HashPassword(null, "password");
             var user = new MongoUser<Guid>("test@example.com")
@@ -199,13 +176,107 @@ namespace IdentityMongoTests
             Assert.NotEmpty(twoFactorToken);
             bool tokenVerified = await _userManager.VerifyTwoFactorTokenAsync(user, validProviders[0], twoFactorToken);
             Assert.True(tokenVerified);
+            result = await _userManager.RedeemTwoFactorRecoveryCodeAsync(user, codes[0]);
+            Assert.True(result.Succeeded);
+            result = await _userManager.RedeemTwoFactorRecoveryCodeAsync(user, codes[0]);
+            Assert.False(result.Succeeded);
+            result = await _userManager.SetLockoutEnabledAsync(user, false);
+            Assert.True(result.Succeeded);
+            bool lockoutEnabled = await _userManager.GetLockoutEnabledAsync(user);
+            Assert.False(lockoutEnabled);
+            result = await _userManager.SetLockoutEnabledAsync(user, true);
+            Assert.True(result.Succeeded);
+            result = await _userManager.SetLockoutEndDateAsync(user, DateTimeOffset.UtcNow.AddMinutes(1));
+            Assert.True(result.Succeeded);
+            bool lockedOut = await _userManager.IsLockedOutAsync(user);
+            Assert.True(lockedOut);
+            result = await _userManager.SetLockoutEndDateAsync(user, null);
+            lockedOut = await _userManager.IsLockedOutAsync(user);
+            Assert.False(lockedOut);
+            DateTimeOffset? lockoutEnd = await _userManager.GetLockoutEndDateAsync(user);
+            Assert.Null(lockoutEnd);
+            int failedAttempts = await _userManager.GetAccessFailedCountAsync(user);
+            Assert.Equal(0, failedAttempts);
+            result = await _userManager.AccessFailedAsync(user);
+            Assert.True(result.Succeeded);
+            failedAttempts = await _userManager.GetAccessFailedCountAsync(user);
+            Assert.Equal(1, failedAttempts);
+            result = await _userManager.ResetAccessFailedCountAsync(user);
+            Assert.True(result.Succeeded);
+            failedAttempts = await _userManager.GetAccessFailedCountAsync(user);
+            Assert.Equal(0, failedAttempts);
+            string authenticatorKey = _userManager.GenerateNewAuthenticatorKey();
+            Assert.NotEqual(0, authenticatorKey.Length);
+            string? key = await _userManager.GetAuthenticatorKeyAsync(user);
+            Assert.Null(key);
+            result = await _userManager.ResetAuthenticatorKeyAsync(user);
+            Assert.True(result.Succeeded);
+            _userManager.RegisterTokenProvider("secret-provider", new DataProtectorTokenProvider<MongoUser<Guid>>(new EphemeralDataProtectionProvider(), new OptionsWrapper<DataProtectionTokenProviderOptions>(new DataProtectionTokenProviderOptions())));
+            string? authenticationToken = await _userManager.GenerateUserTokenAsync(user, "secret-provider", "authentication");
+            Assert.NotNull(authenticationToken);
+            bool verified = await _userManager.VerifyUserTokenAsync(user, "secret-provider", "authentication", authenticationToken);
+            Assert.True(verified);
+            result = await _userManager.RemoveAuthenticationTokenAsync(user, "[AspNetUserStore]", "AuthenticatorKey");
+            Assert.True(result.Succeeded);
+            result = await _userManager.DeleteAsync(user);
+            Assert.True(result.Succeeded);
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await _userManager.CreateAsync(null));
         }
 
-        public void Dispose()
+        [Fact]
+        public async Task RoleManager_Tests()
         {
-            _runner.Dispose();
-            _userManager.Dispose();
-            _roleManager.Dispose();
+            List<MongoRole<Guid>>? roles = await _roleManager.Roles.ToListAsync();
+            roles.ForEach(r => _roleManager.DeleteAsync(r));
+
+            // Create a new role
+            var role = new MongoRole<Guid>("Administrator");
+            IdentityResult result = await _roleManager.CreateAsync(role);
+            Assert.True(result.Succeeded);
+
+            // Find role by name
+            MongoRole<Guid>? foundRole = await _roleManager.FindByNameAsync("Administrator");
+            Assert.NotNull(foundRole);
+            Assert.Equal(role.Name, foundRole.Name);
+
+            // Find role by ID
+            foundRole = await _roleManager.FindByIdAsync(role.Id.ToString());
+            Assert.NotNull(foundRole);
+            Assert.Equal(role.Id, foundRole.Id);
+
+            // Update role
+            role.Name = "Admin";
+            result = await _roleManager.UpdateAsync(role);
+            Assert.True(result.Succeeded);
+            foundRole = await _roleManager.FindByIdAsync(role.Id.ToString());
+            Assert.Equal("Admin", foundRole?.Name);
+
+            // Add claim to role
+            var claim = new Claim("Permission", "Edit");
+            result = await _roleManager.AddClaimAsync(role, claim);
+            Assert.True(result.Succeeded);
+            IList<Claim> claims = await _roleManager.GetClaimsAsync(role);
+            Assert.Single(claims);
+            Assert.Equal(claim.Type, claims[0].Type);
+            Assert.Equal(claim.Value, claims[0].Value);
+
+            // Remove claim from role
+            result = await _roleManager.RemoveClaimAsync(role, claim);
+            Assert.True(result.Succeeded);
+            claims = await _roleManager.GetClaimsAsync(role);
+            Assert.Empty(claims);
+
+            // Delete role
+            result = await _roleManager.DeleteAsync(role);
+            Assert.True(result.Succeeded);
+            foundRole = await _roleManager.FindByIdAsync(role.Id.ToString());
+            Assert.Null(foundRole);
+
+            // Role exists
+            bool roleExists = await _roleManager.RoleExistsAsync("Admin");
+            Assert.False(roleExists);
+
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await _roleManager.CreateAsync(null));
         }
     }
 }

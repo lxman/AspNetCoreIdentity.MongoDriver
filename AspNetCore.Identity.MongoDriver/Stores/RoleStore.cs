@@ -51,11 +51,9 @@ namespace AspNetCore.Identity.MongoDriver.Stores
             await PreambleAsync(cancellationToken);
             ArgumentNullException.ThrowIfNull(role);
             FilterDefinition<TRole>? filter = Builders<TRole>.Filter.Eq(r => r.Id, role.Id);
-            UpdateDefinition<TRole>? update = Builders<TRole>.Update.Set(r => r, role)
-                .Set(r => r.NormalizedName, role.NormalizedName);
-            UpdateResult? updateResult = await _collection.UpdateOneAsync(filter, update, cancellationToken: cancellationToken)
+            ReplaceOneResult? replaceOneResult = await _collection.ReplaceOneAsync(filter, role, cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
-            if (updateResult.IsAcknowledged && updateResult.ModifiedCount == 1)
+            if (replaceOneResult.IsAcknowledged && replaceOneResult.ModifiedCount == 1)
             {
                 return IdentityResult.Success;
             }
@@ -114,8 +112,8 @@ namespace AspNetCore.Identity.MongoDriver.Stores
         public async Task<TRole?> FindByIdAsync(string roleId, CancellationToken cancellationToken)
         {
             await PreambleAsync(cancellationToken);
-            FilterDefinition<TRole>? filter = Builders<TRole>.Filter.Eq(r => r.Id.ToString(), roleId);
-            return await _collection.Find(filter).FirstOrDefaultAsync(cancellationToken);
+            List<TRole> roles = Roles.ToList();
+            return roles.FirstOrDefault(r => r.Id.ToString() == roleId);
         }
 
         public async Task<TRole?> FindByNameAsync(string normalizedRoleName, CancellationToken cancellationToken)
@@ -148,8 +146,11 @@ namespace AspNetCore.Identity.MongoDriver.Stores
             await PreambleAsync(cancellationToken);
             ArgumentNullException.ThrowIfNull(role);
             ArgumentNullException.ThrowIfNull(claim);
-            var roleClaim = new IdentityRoleClaim<TKey>();
-            roleClaim.InitializeFromClaim(claim);
+            IdentityRoleClaim<TKey>? roleClaim = role.Claims.FirstOrDefault(c => c.ClaimType == claim.Type && c.ClaimValue == claim.Value);
+            if (roleClaim is null)
+            {
+                return;
+            }
             role.Claims.Remove(roleClaim);
         }
 

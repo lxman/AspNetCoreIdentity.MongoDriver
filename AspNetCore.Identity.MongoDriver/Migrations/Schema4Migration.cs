@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using MongoDB.Driver;
 
-namespace AspNetCore.Identity.MongoDriver.Migrations;
+namespace AspNetCoreIdentity.MongoDriver.Migrations;
 
 internal class Schema4Migration : BaseMigration
 {

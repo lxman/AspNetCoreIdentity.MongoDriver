@@ -1,10 +1,10 @@
 ﻿using System.Runtime.CompilerServices;
-using AspNetCore.Identity.MongoDriver.Models;
+using AspNetCoreIdentity.MongoDriver.Models;
 using MongoDB.Driver;
 
 [assembly: InternalsVisibleTo("Tests")]
 
-namespace AspNetCore.Identity.MongoDriver.Migrations;
+namespace AspNetCoreIdentity.MongoDriver.Migrations;
 
 internal static class Migrator
 {

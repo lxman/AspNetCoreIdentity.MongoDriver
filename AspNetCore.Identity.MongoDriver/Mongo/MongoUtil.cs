@@ -2,7 +2,7 @@
 
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 
-namespace AspNetCore.Identity.MongoDriver.Mongo;
+namespace AspNetCoreIdentity.MongoDriver.Mongo;
 
 public static class MongoUtil
 {

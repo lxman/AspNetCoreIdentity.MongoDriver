@@ -1,9 +1,9 @@
 ﻿using System.Security.Claims;
-using AspNetCore.Identity.MongoDriver.Models;
+using AspNetCoreIdentity.MongoDriver.Models;
 using Microsoft.AspNetCore.Identity;
 using MongoDB.Driver;
 
-namespace AspNetCore.Identity.MongoDriver.Stores;
+namespace AspNetCoreIdentity.MongoDriver.Stores;
 
 public class RoleStore<TRole, TKey> :
     IRoleClaimStore<TRole>,

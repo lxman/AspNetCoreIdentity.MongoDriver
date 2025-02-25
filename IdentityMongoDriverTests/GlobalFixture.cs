@@ -1,5 +1,5 @@
-﻿using AspNetCore.Identity.MongoDriver;
-using AspNetCore.Identity.MongoDriver.Models;
+﻿using AspNetCoreIdentity.MongoDriver;
+using AspNetCoreIdentity.MongoDriver.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Mongo2Go;

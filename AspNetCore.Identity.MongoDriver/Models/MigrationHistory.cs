@@ -1,6 +1,6 @@
 ﻿using MongoDB.Bson;
 
-namespace AspNetCore.Identity.MongoDriver.Models;
+namespace AspNetCoreIdentity.MongoDriver.Models;
 
 public class MigrationHistory : IComparable<MigrationHistory>, IComparable
 {

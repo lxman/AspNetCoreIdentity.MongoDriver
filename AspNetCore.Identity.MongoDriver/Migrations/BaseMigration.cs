@@ -1,8 +1,8 @@
-﻿using AspNetCore.Identity.MongoDriver.Models;
+﻿using AspNetCoreIdentity.MongoDriver.Models;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace AspNetCore.Identity.MongoDriver.Migrations;
+namespace AspNetCoreIdentity.MongoDriver.Migrations;
 
 internal abstract class BaseMigration
 {

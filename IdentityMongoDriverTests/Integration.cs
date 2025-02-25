@@ -1,5 +1,5 @@
 ﻿using System.Security.Claims;
-using AspNetCore.Identity.MongoDriver.Models;
+using AspNetCoreIdentity.MongoDriver.Models;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;

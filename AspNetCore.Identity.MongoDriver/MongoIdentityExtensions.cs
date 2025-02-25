@@ -1,13 +1,13 @@
-﻿using AspNetCore.Identity.MongoDriver.Migrations;
-using AspNetCore.Identity.MongoDriver.Models;
-using AspNetCore.Identity.MongoDriver.Mongo;
-using AspNetCore.Identity.MongoDriver.Stores;
+﻿using AspNetCoreIdentity.MongoDriver.Migrations;
+using AspNetCoreIdentity.MongoDriver.Models;
+using AspNetCoreIdentity.MongoDriver.Mongo;
+using AspNetCoreIdentity.MongoDriver.Stores;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
-namespace AspNetCore.Identity.MongoDriver;
+namespace AspNetCoreIdentity.MongoDriver;
 
 public static class MongoIdentityExtensions
 {

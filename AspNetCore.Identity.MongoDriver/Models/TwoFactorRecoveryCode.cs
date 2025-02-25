@@ -1,4 +1,4 @@
-﻿namespace AspNetCore.Identity.MongoDriver.Models;
+﻿namespace AspNetCoreIdentity.MongoDriver.Models;
 
 internal class TwoFactorRecoveryCode
 {

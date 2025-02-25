@@ -31,7 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AspNetCore.Identity.MongoDriver\AspNetCore.Identity.MongoDriver.csproj" />
+    <ProjectReference Include="..\AspNetCore.Identity.MongoDriver\AspNetCoreIdentity.MongoDriver.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using MongoDB.Bson;
 
-namespace AspNetCore.Identity.MongoDriver.Models;
+namespace AspNetCoreIdentity.MongoDriver.Models;
 
 internal class MigrationMongoUser : MigrationMongoUser<ObjectId>
 {

@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace AspNetCore.Identity.MongoDriver.Mongo;
+namespace AspNetCoreIdentity.MongoDriver.Mongo;
 
 internal static class TypeConverterResolver
 {

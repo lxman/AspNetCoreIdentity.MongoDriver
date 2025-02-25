@@ -1,7 +1,7 @@
 ﻿using MongoDB.Driver;
 using MongoDB.Driver.Core.Configuration;
 
-namespace AspNetCore.Identity.MongoDriver;
+namespace AspNetCoreIdentity.MongoDriver;
 
 public class MongoIdentityOptions
 {

@@ -1,12 +1,12 @@
 ﻿using System.Security.Claims;
-using AspNetCore.Identity.MongoDriver.Models;
+using AspNetCoreIdentity.MongoDriver.Models;
 using Microsoft.AspNetCore.Identity;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 
 #pragma warning disable CA1862
 
-namespace AspNetCore.Identity.MongoDriver.Stores;
+namespace AspNetCoreIdentity.MongoDriver.Stores;
 
 public class UserStore<TUser, TRole, TKey> :
     IUserClaimStore<TUser>,

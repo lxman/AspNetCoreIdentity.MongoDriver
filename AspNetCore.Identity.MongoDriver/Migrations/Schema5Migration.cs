@@ -1,6 +1,6 @@
 ﻿using MongoDB.Driver;
 
-namespace AspNetCore.Identity.MongoDriver.Migrations;
+namespace AspNetCoreIdentity.MongoDriver.Migrations;
 
 internal class Schema5Migration : BaseMigration
 {

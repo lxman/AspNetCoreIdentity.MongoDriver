@@ -2,7 +2,7 @@
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace AspNetCore.Identity.MongoDriver.Models;
+namespace AspNetCoreIdentity.MongoDriver.Models;
 
 [BsonIgnoreExtraElements]
 public class MongoRole : MongoRole<ObjectId>

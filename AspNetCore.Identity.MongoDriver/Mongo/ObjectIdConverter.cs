@@ -2,7 +2,7 @@
 using System.Globalization;
 using MongoDB.Bson;
 
-namespace AspNetCore.Identity.MongoDriver.Mongo;
+namespace AspNetCoreIdentity.MongoDriver.Mongo;
 
 public class ObjectIdConverter : TypeConverter
 {

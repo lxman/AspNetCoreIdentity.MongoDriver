@@ -14,14 +14,14 @@ public static class MongoIdentityExtensions
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser>(this IServiceCollection services)
         where TUser : MongoUser
     {
-        return AddIdentityMongoDbProvider<TUser, MongoRole, ObjectId>(services, x => { });
+        return AddIdentityMongoDbProvider<TUser, MongoRole, ObjectId>(services, _ => { });
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser, TKey>(this IServiceCollection services)
         where TKey : IEquatable<TKey>
         where TUser : MongoUser<TKey>
     {
-        return AddIdentityMongoDbProvider<TUser, MongoRole<TKey>, TKey>(services, x => { });
+        return AddIdentityMongoDbProvider<TUser, MongoRole<TKey>, TKey>(services, _ => { });
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser>(this IServiceCollection services,
@@ -53,7 +53,7 @@ public static class MongoIdentityExtensions
         where TUser : MongoUser<TKey>
         where TRole : MongoRole<TKey>
     {
-        return AddIdentityMongoDbProvider<TUser, TRole, TKey>(services, x => { }, setupDatabaseAction);
+        return AddIdentityMongoDbProvider<TUser, TRole, TKey>(services, _ => { }, setupDatabaseAction);
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider(this IServiceCollection services,
@@ -69,12 +69,12 @@ public static class MongoIdentityExtensions
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser, TRole, TKey>(this IServiceCollection services,
-        Action<IdentityOptions> setupIdentityAction, Action<MongoIdentityOptions> setupDatabaseAction, IdentityErrorDescriber identityErrorDescriber = null)
+        Action<IdentityOptions> setupIdentityAction, Action<MongoIdentityOptions> setupDatabaseAction, IdentityErrorDescriber identityErrorDescriber = null!)
         where TKey : IEquatable<TKey>
         where TUser : MongoUser<TKey>
         where TRole : MongoRole<TKey>
     {
-        var dbOptions = new MongoIdentityOptions();
+        MongoIdentityOptions dbOptions = new();
         setupDatabaseAction(dbOptions);
 
         IMongoCollection<MigrationHistory> migrationCollection = MongoUtil.FromConnectionString<MigrationHistory>(dbOptions, dbOptions.MigrationCollection);
@@ -89,7 +89,7 @@ public static class MongoIdentityExtensions
                 migrationCollection, migrationUserCollection, roleCollection);
         }
 
-        IdentityBuilder? builder = services.AddIdentity<TUser, TRole>(setupIdentityAction ?? (x => { }));
+        IdentityBuilder? builder = services.AddIdentity<TUser, TRole>(setupIdentityAction);
 
         builder.AddRoleStore<RoleStore<TRole, TKey>>()
             .AddUserStore<UserStore<TUser, TRole, TKey>>()
@@ -97,8 +97,8 @@ public static class MongoIdentityExtensions
             .AddRoleManager<RoleManager<TRole>>()
             .AddDefaultTokenProviders();
 
-        services.AddSingleton(x => userCollection);
-        services.AddSingleton(x => roleCollection);
+        services.AddSingleton(_ => userCollection);
+        services.AddSingleton(_ => roleCollection);
 
         // register custom ObjectId TypeConverter
         if (typeof(TKey) == typeof(ObjectId))
@@ -107,8 +107,8 @@ public static class MongoIdentityExtensions
         }
 
         // Identity Services
-        services.AddTransient<IRoleStore<TRole>>(x => new RoleStore<TRole, TKey>(roleCollection, identityErrorDescriber));
-        services.AddTransient<IUserStore<TUser>>(x => new UserStore<TUser, TRole, TKey>(userCollection, roleCollection, identityErrorDescriber));
+        services.AddTransient<IRoleStore<TRole>>(_ => new RoleStore<TRole, TKey>(roleCollection, identityErrorDescriber));
+        services.AddTransient<IUserStore<TUser>>(_ => new UserStore<TUser, TRole, TKey>(userCollection, roleCollection, identityErrorDescriber));
 
         return builder;
     }

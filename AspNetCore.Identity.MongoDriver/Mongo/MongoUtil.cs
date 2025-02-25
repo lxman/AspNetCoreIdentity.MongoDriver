@@ -1,5 +1,7 @@
 ﻿using MongoDB.Driver;
 
+// ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
+
 namespace AspNetCore.Identity.MongoDriver.Mongo;
 
 public static class MongoUtil
@@ -8,24 +10,21 @@ public static class MongoUtil
     {
         IMongoCollection<TItem> collection;
 
-        Type type = typeof(TItem);
-
-
         if (options.ConnectionString is not null)
         {
-            var url = new MongoUrl(options.ConnectionString);
+            MongoUrl url = new(options.ConnectionString);
             MongoClientSettings? settings = MongoClientSettings.FromUrl(url);
 
             settings.SslSettings = options.SslSettings;
             settings.ClusterConfigurator = options.ClusterConfigurator;
 
-            var client = new MongoClient(settings);
+            MongoClient client = new(settings);
             collection = client.GetDatabase(url.DatabaseName ?? "default")
                 .GetCollection<TItem>(collectionName);
         }
         else
         {
-            var settings = new MongoClientSettings
+            MongoClientSettings settings = new()
             {
                 SslSettings = options.SslSettings,
                 ClusterConfigurator = options.ClusterConfigurator

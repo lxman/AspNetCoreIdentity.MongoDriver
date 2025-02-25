@@ -7,9 +7,12 @@ namespace AspNetCore.Identity.MongoDriver.Models;
 [BsonIgnoreExtraElements]
 public class MongoUser : MongoUser<ObjectId>
 {
-    public MongoUser() { }
+    public MongoUser()
+    { }
 
-    public MongoUser(string userName) : base(userName) { }
+    public MongoUser(string userName) : base(userName)
+    {
+    }
 }
 
 [BsonIgnoreExtraElements]

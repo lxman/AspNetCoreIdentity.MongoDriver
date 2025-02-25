@@ -7,9 +7,13 @@ namespace AspNetCore.Identity.MongoDriver.Models;
 [BsonIgnoreExtraElements]
 public class MongoRole : MongoRole<ObjectId>
 {
-    public MongoRole() : base() { }
+    public MongoRole() : base()
+    {
+    }
 
-    public MongoRole(string name) : base(name) { }
+    public MongoRole(string name) : base(name)
+    {
+    }
 }
 
 [BsonIgnoreExtraElements]

@@ -5,7 +5,12 @@ VisualStudioVersion = 17.13.35818.85
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AspNetCore.Identity.MongoDriver", "AspNetCore.Identity.MongoDriver\AspNetCore.Identity.MongoDriver.csproj", "{ED62D20A-63F7-4E20-BAA5-4A86662180BF}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IdentityMongoTests", "IdentityMongoTests\IdentityMongoTests.csproj", "{873064B9-0A5D-4FF2-BF21-EB0D67DA3297}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IdentityMongoDriverTests", "IdentityMongoDriverTests\IdentityMongoDriverTests.csproj", "{873064B9-0A5D-4FF2-BF21-EB0D67DA3297}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{02EA681E-C7D8-13C7-8484-4AC65E1B71E8}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

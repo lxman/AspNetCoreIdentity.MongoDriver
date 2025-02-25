@@ -26,7 +26,7 @@ public static class MongoStoreExtensions
         where TUser : MongoUser<TKey>
         where TRole : MongoRole<TKey>
     {
-        var dbOptions = new MongoIdentityOptions();
+        MongoIdentityOptions dbOptions = new();
         setupDatabaseAction(dbOptions);
 
         IMongoCollection<MigrationHistory> migrationCollection =
@@ -42,8 +42,8 @@ public static class MongoStoreExtensions
                 migrationCollection, migrationUserCollection, roleCollection);
         }
 
-        builder.Services.AddSingleton(x => userCollection);
-        builder.Services.AddSingleton(x => roleCollection);
+        builder.Services.AddSingleton(_ => userCollection);
+        builder.Services.AddSingleton(_ => roleCollection);
 
         // register custom ObjectId TypeConverter
         if (typeof(TKey) == typeof(ObjectId))
@@ -52,10 +52,10 @@ public static class MongoStoreExtensions
         }
 
         // Identity Services
-        builder.Services.AddTransient<IRoleStore<TRole>>(x =>
+        builder.Services.AddTransient<IRoleStore<TRole>>(_ =>
             new RoleStore<TRole, TKey>(roleCollection, identityErrorDescriber));
-        builder.Services.AddTransient<IUserStore<TUser>>(x =>
-            new UserStore<TUser?, TRole, TKey>(userCollection, roleCollection, identityErrorDescriber));
+        builder.Services.AddTransient<IUserStore<TUser>>(_ =>
+            new UserStore<TUser, TRole, TKey>(userCollection, roleCollection, identityErrorDescriber));
 
         return builder;
     }

@@ -5,7 +5,9 @@ namespace AspNetCore.Identity.MongoDriver.Models;
 
 internal class MigrationMongoUser : MigrationMongoUser<ObjectId>
 {
-    public MigrationMongoUser() : base() { }
+    public MigrationMongoUser() : base()
+    {
+    }
 }
 
 internal class MigrationMongoUser<TKey> : IdentityUser<TKey> where TKey : IEquatable<TKey>

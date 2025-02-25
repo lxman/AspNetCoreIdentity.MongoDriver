@@ -25,7 +25,6 @@ internal class Schema4Migration : BaseMigration
             usersCollection.UpdateOne(x => x.Id.Equals(user.Id),
                 Builders<TUser>.Update.Set(x => x.Tokens, tokens)
                     .Set(x => x.AuthenticatorKey, null));
-
         }
     }
 }

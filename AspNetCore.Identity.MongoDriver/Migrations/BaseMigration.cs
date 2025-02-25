@@ -7,6 +7,7 @@ namespace AspNetCore.Identity.MongoDriver.Migrations;
 internal abstract class BaseMigration
 {
     private static List<BaseMigration> _migrations;
+
     public static List<BaseMigration> Migrations
     {
         get
@@ -31,7 +32,6 @@ internal abstract class BaseMigration
             return _migrations;
         }
     }
-
 
     public abstract int Version { get; }
 

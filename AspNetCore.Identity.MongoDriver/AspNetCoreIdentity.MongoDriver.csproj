@@ -7,15 +7,22 @@
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Title>AspNetCoreIdentity.MongoDriver</Title>
     <Description>A mongodb provisioner for AspNetCore.Identity</Description>
-    <PackageProjectUrl>https://github.com/lxman/AspNetCore.Identity.MongoDriver</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/lxman/AspNetCoreIdentity.MongoDriver</PackageProjectUrl>
     <PackageTags>mongo;identity;aspnetcore</PackageTags>
+    <VersionPrefix>0.9.0.0</VersionPrefix>
     <FileVersion>0.9.0.0</FileVersion>
     <AssemblyVersion>0.9.0.0</AssemblyVersion>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/lxman/AspNetCoreIdentity.MongoDriver</RepositoryUrl>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="..\LICENSE.txt">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\README.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>

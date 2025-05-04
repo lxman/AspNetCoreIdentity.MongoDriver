@@ -9,9 +9,9 @@
     <Description>A mongodb provisioner for AspNetCore.Identity</Description>
     <PackageProjectUrl>https://github.com/lxman/AspNetCoreIdentity.MongoDriver</PackageProjectUrl>
     <PackageTags>mongo;identity;aspnetcore</PackageTags>
-    <VersionPrefix>0.9.0.4</VersionPrefix>
-    <FileVersion>0.9.0.4</FileVersion>
-    <AssemblyVersion>0.9.0.4</AssemblyVersion>
+    <VersionPrefix>0.9.0.5</VersionPrefix>
+    <FileVersion>0.9.0.5</FileVersion>
+    <AssemblyVersion>0.9.0.5</AssemblyVersion>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/lxman/AspNetCoreIdentity.MongoDriver</RepositoryUrl>

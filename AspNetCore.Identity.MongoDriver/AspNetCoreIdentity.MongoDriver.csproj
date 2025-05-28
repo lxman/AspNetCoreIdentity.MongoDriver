@@ -29,10 +29,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="9.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.DataProtection" Version="9.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.3.1" />
-    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="9.0.4" />
-    <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="9.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="9.0.5" />
     <PackageReference Include="MongoDB.Bson" Version="3.4.0" />
     <PackageReference Include="MongoDB.Driver" Version="3.4.0" />
   </ItemGroup>

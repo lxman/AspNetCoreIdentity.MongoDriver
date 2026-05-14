@@ -24,15 +24,25 @@ jobs:
       - name: Restore
         run: dotnet restore AspNetCore.Identity.MongoDriver/AspNetCoreIdentity.MongoDriver.csproj
 
-      - name: Pack
+      - name: Build
         run: >
-          dotnet pack AspNetCore.Identity.MongoDriver/AspNetCoreIdentity.MongoDriver.csproj
+          dotnet build AspNetCore.Identity.MongoDriver/AspNetCoreIdentity.MongoDriver.csproj
           --configuration Release
           --no-restore
           -p:Version=${{ steps.version.outputs.version }}
           -p:FileVersion=${{ steps.version.outputs.version }}
           -p:AssemblyVersion=${{ steps.version.outputs.version }}
           -p:ContinuousIntegrationBuild=true
+          -p:GeneratePackageOnBuild=false
+
+      - name: Pack
+        run: >
+          dotnet pack AspNetCore.Identity.MongoDriver/AspNetCoreIdentity.MongoDriver.csproj
+          --configuration Release
+          --no-build
+          -p:Version=${{ steps.version.outputs.version }}
+          -p:FileVersion=${{ steps.version.outputs.version }}
+          -p:AssemblyVersion=${{ steps.version.outputs.version }}
           --output ./artifacts
 
       - name: Push to NuGet

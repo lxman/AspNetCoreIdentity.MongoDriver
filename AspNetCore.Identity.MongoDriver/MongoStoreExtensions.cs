@@ -26,6 +26,8 @@ public static class MongoStoreExtensions
         where TUser : MongoUser<TKey>
         where TRole : MongoRole<TKey>
     {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(setupDatabaseAction);
         MongoIdentityOptions dbOptions = new();
         setupDatabaseAction(dbOptions);
 

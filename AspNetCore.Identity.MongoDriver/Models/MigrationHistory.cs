@@ -10,14 +10,14 @@ public class MigrationHistory : IComparable<MigrationHistory>, IComparable
     public int DatabaseVersion { get; set; }
     public DateTime InstalledOn { get; set; }
 
-    public int CompareTo(MigrationHistory other)
+    public int CompareTo(MigrationHistory? other)
     {
         if (ReferenceEquals(this, other)) return 0;
         if (ReferenceEquals(null, other)) return 1;
         return DatabaseVersion.CompareTo(other.DatabaseVersion);
     }
 
-    public int CompareTo(object obj)
+    public int CompareTo(object? obj)
     {
         if (ReferenceEquals(null, obj)) return 1;
         if (ReferenceEquals(this, obj)) return 0;

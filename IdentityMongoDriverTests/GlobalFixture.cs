@@ -19,7 +19,14 @@ public class GlobalFixture : IDisposable
 
     public GlobalFixture()
     {
-        BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+        try
+        {
+            BsonSerializer.RegisterSerializer(new GuidSerializer(GuidRepresentation.Standard));
+        }
+        catch (BsonSerializationException)
+        {
+            // Already registered
+        }
         IServiceCollection services = new ServiceCollection();
         services.AddLogging();
         services.AddIdentityMongoDbProvider<MongoUser<Guid>, MongoRole<Guid>, Guid>(identity =>

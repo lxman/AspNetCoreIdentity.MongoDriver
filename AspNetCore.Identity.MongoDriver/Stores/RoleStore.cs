@@ -1,4 +1,5 @@
-﻿using System.Security.Claims;
+﻿using System.ComponentModel;
+using System.Security.Claims;
 using AspNetCoreIdentity.MongoDriver.Models;
 using Microsoft.AspNetCore.Identity;
 using MongoDB.Driver;
@@ -112,15 +113,15 @@ public class RoleStore<TRole, TKey> :
     public async Task<TRole?> FindByIdAsync(string roleId, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
-        List<TRole> roles = Roles.ToList();
-        return roles.FirstOrDefault(r => r.Id.ToString() == roleId);
+        TKey id = (TKey)TypeDescriptor.GetConverter(typeof(TKey)).ConvertFromInvariantString(roleId)!;
+        return await _collection.Find(r => r.Id.Equals(id)).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TRole?> FindByNameAsync(string normalizedRoleName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
         FilterDefinition<TRole>? filter = Builders<TRole>.Filter.Eq(r => r.NormalizedName, normalizedRoleName);
-        return await _collection.Find(filter).FirstOrDefaultAsync(cancellationToken);
+        return await _collection.Find(filter).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IList<Claim>> GetClaimsAsync(TRole role, CancellationToken cancellationToken = new())

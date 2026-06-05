@@ -1,10 +1,10 @@
-﻿using System.Security.Claims;
+﻿using System.ComponentModel;
+using System.Security.Claims;
 using AspNetCoreIdentity.MongoDriver.Models;
 using Microsoft.AspNetCore.Identity;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 
-#pragma warning disable CA1862
 
 namespace AspNetCoreIdentity.MongoDriver.Stores;
 
@@ -103,7 +103,7 @@ public class UserStore<TUser, TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        await _userCollection.InsertOneAsync(user, new InsertOneOptions(), cancellationToken);
+        await _userCollection.InsertOneAsync(user, new InsertOneOptions(), cancellationToken).ConfigureAwait(false);
         return IdentityResult.Success;
     }
 
@@ -111,7 +111,7 @@ public class UserStore<TUser, TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        ReplaceOneResult? result = await _userCollection.ReplaceOneAsync(u => u.Id.Equals(user.Id), user, new ReplaceOptions(), cancellationToken);
+        ReplaceOneResult? result = await _userCollection.ReplaceOneAsync(u => u.Id.Equals(user.Id), user, new ReplaceOptions(), cancellationToken).ConfigureAwait(false);
         if (result.IsAcknowledged && result is { IsModifiedCountAvailable: true, ModifiedCount: 1 })
         {
             return IdentityResult.Success;
@@ -124,7 +124,7 @@ public class UserStore<TUser, TRole, TKey> :
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
         FilterDefinition<TUser> filter = Builders<TUser>.Filter.Eq(u => u.Id, user.Id);
-        DeleteResult? deleteResult = await _userCollection.DeleteOneAsync(filter, cancellationToken);
+        DeleteResult? deleteResult = await _userCollection.DeleteOneAsync(filter, cancellationToken).ConfigureAwait(false);
         if ((deleteResult?.IsAcknowledged ?? false) && deleteResult.DeletedCount == 1)
         {
             return IdentityResult.Success;
@@ -135,14 +135,14 @@ public class UserStore<TUser, TRole, TKey> :
     public async Task<TUser?> FindByIdAsync(string userId, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
-        List<TUser> users = await Users.ToListAsync(cancellationToken);
-        return users.FirstOrDefault(u => u.Id.ToString() == userId);
+        TKey id = (TKey)TypeDescriptor.GetConverter(typeof(TKey)).ConvertFromInvariantString(userId)!;
+        return await _userCollection.Find(u => u.Id.Equals(id)).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TUser?> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
-        return Users.FirstOrDefault(u => u.NormalizedUserName == normalizedUserName);
+        return await _userCollection.Find(u => u.NormalizedUserName == normalizedUserName).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<IList<Claim>> GetClaimsAsync(TUser user, CancellationToken cancellationToken)
@@ -229,30 +229,27 @@ public class UserStore<TUser, TRole, TKey> :
     public async Task<IList<UserLoginInfo>> GetLoginsAsync(TUser user, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
-        return (await Users.FirstOrDefaultAsync(cancellationToken))?.Logins
+        ArgumentNullException.ThrowIfNull(user);
+        return user.Logins
             .Select(l => new UserLoginInfo(l.LoginProvider, l.ProviderKey, l.ProviderDisplayName))
-            .ToList() ?? [];
+            .ToList();
     }
 
     public async Task<TUser?> FindByLoginAsync(string loginProvider, string providerKey, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
-        foreach (TUser user in Users)
-        {
-            if (user.Logins.Any(l => l.LoginProvider == loginProvider && l.ProviderKey == providerKey))
-            {
-                return user;
-            }
-        }
-
-        return null;
+        return await _userCollection.Find(u => u.Logins.Any(l => l.LoginProvider == loginProvider && l.ProviderKey == providerKey))
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task AddToRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        TRole? role = Roles.FirstOrDefault(r => r.NormalizedName != null && r.NormalizedName == roleName.ToUpperInvariant());
+        TRole? role = await _roleCollection.Find(r => r.NormalizedName == roleName.ToUpperInvariant())
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
         if (role is null)
         {
             throw new InvalidOperationException($"Role {roleName} not found.");
@@ -264,7 +261,9 @@ public class UserStore<TUser, TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        TRole? role = Roles.FirstOrDefault(r => r.NormalizedName != null && r.NormalizedName == roleName.ToUpperInvariant());
+        TRole? role = await _roleCollection.Find(r => r.NormalizedName == roleName.ToUpperInvariant())
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
         if (role is null)
         {
             throw new InvalidOperationException($"Role {roleName} not found.");
@@ -277,21 +276,45 @@ public class UserStore<TUser, TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        return user.Roles.Select(r => Roles.FirstOrDefault(role => role.Id.Equals(r))?.Name ?? string.Empty).ToList();
+        List<string> roleNames = [];
+        foreach (TKey roleId in user.Roles)
+        {
+            TRole? role = await _roleCollection.Find(r => r.Id.Equals(roleId))
+                .FirstOrDefaultAsync(cancellationToken)
+                .ConfigureAwait(false);
+            if (role?.Name != null)
+            {
+                roleNames.Add(role.Name);
+            }
+        }
+        return roleNames;
     }
 
     public async Task<bool> IsInRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        return user.Roles.Any(r => Roles.FirstOrDefault(role => role.NormalizedName != null && role.NormalizedName == roleName.ToUpperInvariant())?.Id.Equals(r) ?? false);
+        TRole? role = await _roleCollection.Find(r => r.NormalizedName == roleName.ToUpperInvariant())
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return role != null && user.Roles.Contains(role.Id);
     }
 
     public async Task<IList<TUser>> GetUsersInRoleAsync(string roleName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
-        List<TRole> roles = await Roles.Where(r => r.NormalizedName != null && r.NormalizedName == roleName.ToUpperInvariant()).ToListAsync(cancellationToken);
-        return Users.Where(u => u.Roles.Any(r => r.Equals(roles[0].Id))).ToList();
+        TRole? role = await _roleCollection.Find(r => r.NormalizedName == roleName.ToUpperInvariant())
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        if (role == null)
+        {
+            return new List<TUser>();
+        }
+
+        return await _userCollection.Find(u => u.Roles.Contains(role.Id))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
     }
 
     public async Task SetPasswordHashAsync(TUser user, string? passwordHash, CancellationToken cancellationToken)
@@ -360,7 +383,7 @@ public class UserStore<TUser, TRole, TKey> :
     public async Task<TUser?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
-        return Users.FirstOrDefault(u => u.NormalizedEmail == normalizedEmail);
+        return await _userCollection.Find(u => u.NormalizedEmail == normalizedEmail).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<string?> GetNormalizedEmailAsync(TUser user, CancellationToken cancellationToken)
@@ -473,14 +496,14 @@ public class UserStore<TUser, TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        await SetTokenAsync(user, InternalLoginProvider, AuthenticatorKeyTokenName, key, cancellationToken);
+        await SetTokenAsync(user, InternalLoginProvider, AuthenticatorKeyTokenName, key, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<string?> GetAuthenticatorKeyAsync(TUser user, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        return await GetTokenAsync(user, InternalLoginProvider, AuthenticatorKeyTokenName, cancellationToken);
+        return await GetTokenAsync(user, InternalLoginProvider, AuthenticatorKeyTokenName, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task SetTokenAsync(TUser user, string loginProvider, string name, string? value, CancellationToken cancellationToken)
@@ -532,7 +555,7 @@ public class UserStore<TUser, TRole, TKey> :
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
         string mergedCodes = string.Join(";", recoveryCodes);
-        await SetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, mergedCodes, cancellationToken);
+        await SetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, mergedCodes, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<bool> RedeemCodeAsync(TUser user, string code, CancellationToken cancellationToken)
@@ -540,7 +563,7 @@ public class UserStore<TUser, TRole, TKey> :
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(code);
-        string? mergedCodes = await GetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, cancellationToken);
+        string? mergedCodes = await GetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, cancellationToken).ConfigureAwait(false);
         if (mergedCodes is null)
         {
             return false;
@@ -551,7 +574,7 @@ public class UserStore<TUser, TRole, TKey> :
             return false;
         }
         List<string> updatedCodes = new(individualCodes.Where(s => s != code));
-        await ReplaceCodesAsync(user, updatedCodes, cancellationToken);
+        await ReplaceCodesAsync(user, updatedCodes, cancellationToken).ConfigureAwait(false);
 
         return true;
     }
@@ -560,7 +583,12 @@ public class UserStore<TUser, TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        return user.Tokens.Count(t => t is { Name: RecoveryCodeTokenName, LoginProvider: InternalLoginProvider });
+        string? mergedCodes = await GetTokenAsync(user, InternalLoginProvider, RecoveryCodeTokenName, cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrEmpty(mergedCodes))
+        {
+            return 0;
+        }
+        return mergedCodes.Split(';', StringSplitOptions.RemoveEmptyEntries).Length;
     }
 
     /// <summary>

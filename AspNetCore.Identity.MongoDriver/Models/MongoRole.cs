@@ -28,8 +28,8 @@ public class MongoRole<TKey>() : IdentityRole<TKey>
 
     public override string ToString()
     {
-        return Name;
+        return Name ?? string.Empty;
     }
 
-    public List<IdentityRoleClaim<TKey>> Claims { get; set; } = [];
+    public List<IdentityRoleClaim<TKey>> Claims { get; private set; } = [];
 }

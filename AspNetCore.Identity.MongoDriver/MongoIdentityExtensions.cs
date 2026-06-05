@@ -74,6 +74,7 @@ public static class MongoIdentityExtensions
         where TUser : MongoUser<TKey>
         where TRole : MongoRole<TKey>
     {
+        ArgumentNullException.ThrowIfNull(setupDatabaseAction);
         MongoIdentityOptions dbOptions = new();
         setupDatabaseAction(dbOptions);
 

@@ -25,11 +25,11 @@ public class MongoUser<TKey>() : IdentityUser<TKey>
         NormalizedUserName = userName.ToUpperInvariant();
     }
 
-    public List<TKey> Roles { get; set; } = [];
+    public List<TKey> Roles { get; private set; } = [];
 
-    public List<IdentityUserClaim<string>> Claims { get; set; } = [];
+    public List<IdentityUserClaim<string>> Claims { get; private set; } = [];
 
-    public List<IdentityUserLogin<string>> Logins { get; set; } = [];
+    public List<IdentityUserLogin<string>> Logins { get; private set; } = [];
 
-    public List<IdentityUserToken<string>> Tokens { get; set; } = [];
+    public List<IdentityUserToken<string>> Tokens { get; private set; } = [];
 }

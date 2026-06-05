@@ -15,9 +15,9 @@ public class MongoIdentityOptions
 
     public string MigrationCollection { get; set; } = "_Migrations";
 
-    public SslSettings SslSettings { get; set; }
+    public SslSettings? SslSettings { get; set; }
 
-    public Action<ClusterBuilder> ClusterConfigurator { get; set; }
+    public Action<ClusterBuilder>? ClusterConfigurator { get; set; }
 
     public bool DisableAutoMigrations { get; set; }
 }

@@ -1,4 +1,5 @@
-﻿using MongoDB.Driver;
+﻿using System.Collections.Concurrent;
+using MongoDB.Driver;
 
 // ReSharper disable ConditionIsAlwaysTrueOrFalseAccordingToNullableAPIContract
 
@@ -6,34 +7,22 @@ namespace AspNetCoreIdentity.MongoDriver.Mongo;
 
 public static class MongoUtil
 {
+    private static readonly ConcurrentDictionary<string, MongoClient> Clients = new();
+
     public static IMongoCollection<TItem> FromConnectionString<TItem>(MongoIdentityOptions options, string collectionName)
     {
-        IMongoCollection<TItem> collection;
+        string connectionString = options.ConnectionString ?? "mongodb://localhost/default";
+        MongoUrl url = new(connectionString);
+        string databaseName = url.DatabaseName ?? "default";
 
-        if (options.ConnectionString is not null)
+        MongoClient client = Clients.GetOrAdd(connectionString, _ =>
         {
-            MongoUrl url = new(options.ConnectionString);
-            MongoClientSettings? settings = MongoClientSettings.FromUrl(url);
-
+            MongoClientSettings settings = MongoClientSettings.FromUrl(url);
             settings.SslSettings = options.SslSettings;
             settings.ClusterConfigurator = options.ClusterConfigurator;
+            return new MongoClient(settings);
+        });
 
-            MongoClient client = new(settings);
-            collection = client.GetDatabase(url.DatabaseName ?? "default")
-                .GetCollection<TItem>(collectionName);
-        }
-        else
-        {
-            MongoClientSettings settings = new()
-            {
-                SslSettings = options.SslSettings,
-                ClusterConfigurator = options.ClusterConfigurator
-            };
-
-            collection = new MongoClient(settings).GetDatabase("default")
-                .GetCollection<TItem>(collectionName);
-        }
-
-        return collection;
+        return client.GetDatabase(databaseName).GetCollection<TItem>(collectionName);
     }
 }

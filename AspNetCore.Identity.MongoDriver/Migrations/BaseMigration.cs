@@ -6,7 +6,7 @@ namespace AspNetCoreIdentity.MongoDriver.Migrations;
 
 internal abstract class BaseMigration
 {
-    private static List<BaseMigration> _migrations;
+    private static List<BaseMigration>? _migrations;
 
     public static List<BaseMigration> Migrations
     {

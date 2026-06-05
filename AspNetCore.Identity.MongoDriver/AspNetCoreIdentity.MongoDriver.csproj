@@ -13,6 +13,10 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/lxman/AspNetCoreIdentity.MongoDriver</RepositoryUrl>
   </PropertyGroup>
+  
+  <ItemGroup>
+    <InternalsVisibleTo Include="IdentityMongoDriverTests" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="..\LICENSE.txt">
@@ -30,8 +34,8 @@
     <PackageReference Include="Microsoft.AspNetCore.Identity" Version="2.3.10" />
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.8" />
     <PackageReference Include="Microsoft.Extensions.Identity.Stores" Version="10.0.8" />
-    <PackageReference Include="MongoDB.Bson" Version="3.8.1" />
-    <PackageReference Include="MongoDB.Driver" Version="3.8.1" />
+    <PackageReference Include="MongoDB.Bson" Version="3.9.0" />
+    <PackageReference Include="MongoDB.Driver" Version="3.9.0" />
   </ItemGroup>
 
 </Project>

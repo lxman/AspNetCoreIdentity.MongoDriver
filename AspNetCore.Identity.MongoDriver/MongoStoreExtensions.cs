@@ -1,4 +1,3 @@
-﻿using AspNetCoreIdentity.MongoDriver.Migrations;
 using AspNetCoreIdentity.MongoDriver.Models;
 using AspNetCoreIdentity.MongoDriver.Mongo;
 using AspNetCoreIdentity.MongoDriver.Stores;
@@ -31,6 +30,18 @@ public static class MongoStoreExtensions
         MongoIdentityOptions dbOptions = new();
         setupDatabaseAction(dbOptions);
 
+        AddStores<TUser, TRole, TKey>(builder.Services, dbOptions, identityErrorDescriber);
+
+        return builder;
+    }
+
+    internal static void AddStores<TUser, TRole, TKey>(IServiceCollection services,
+        MongoIdentityOptions dbOptions,
+        IdentityErrorDescriber? identityErrorDescriber)
+        where TKey : IEquatable<TKey>
+        where TUser : MongoUser<TKey>
+        where TRole : MongoRole<TKey>
+    {
         IMongoCollection<MigrationHistory> migrationCollection =
             MongoUtil.FromConnectionString<MigrationHistory>(dbOptions, dbOptions.MigrationCollection);
         IMongoCollection<MigrationMongoUser<TKey>> migrationUserCollection =
@@ -38,27 +49,26 @@ public static class MongoStoreExtensions
         IMongoCollection<TUser> userCollection = MongoUtil.FromConnectionString<TUser>(dbOptions, dbOptions.UsersCollection);
         IMongoCollection<TRole> roleCollection = MongoUtil.FromConnectionString<TRole>(dbOptions, dbOptions.RolesCollection);
 
-        if (!dbOptions.DisableAutoMigrations)
-        {
-            Migrator.Apply<MigrationMongoUser<TKey>, TRole, TKey>(
-                migrationCollection, migrationUserCollection, roleCollection);
-        }
-
-        builder.Services.AddSingleton(_ => userCollection);
-        builder.Services.AddSingleton(_ => roleCollection);
-
         // register custom ObjectId TypeConverter
         if (typeof(TKey) == typeof(ObjectId))
         {
             TypeConverterResolver.RegisterTypeConverter<ObjectId, ObjectIdConverter>();
         }
 
-        // Identity Services
-        builder.Services.AddTransient<IRoleStore<TRole>>(_ =>
-            new RoleStore<TRole, TKey>(roleCollection, identityErrorDescriber));
-        builder.Services.AddTransient<IUserStore<TUser>>(_ =>
-            new UserStore<TUser, TRole, TKey>(userCollection, roleCollection, identityErrorDescriber));
+        // Migrations and index creation run lazily on first store use (one instance at a
+        // time, guarded by a distributed lock) instead of blocking service registration.
+        MongoIdentityInitializer initializer = new(cancellationToken =>
+            MongoIdentityInitialization.InitializeAsync<TUser, TRole, TKey>(
+                dbOptions, migrationCollection, migrationUserCollection, userCollection, roleCollection, cancellationToken));
 
-        return builder;
+        services.AddSingleton(_ => userCollection);
+        services.AddSingleton(_ => roleCollection);
+        services.AddSingleton(initializer);
+
+        // Identity Services
+        services.AddTransient<IRoleStore<TRole>>(_ =>
+            new RoleStore<TRole, TKey>(roleCollection, identityErrorDescriber, initializer));
+        services.AddTransient<IUserStore<TUser>>(_ =>
+            new UserStore<TUser, TRole, TKey>(userCollection, roleCollection, identityErrorDescriber, initializer));
     }
 }

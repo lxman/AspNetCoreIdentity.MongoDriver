@@ -64,7 +64,7 @@ public class SecurityTests : IDisposable
         await userManager.AccessFailedAsync(user);
 
         // We need to refresh the user object from the database to see the updated lockout state
-        user = await userManager.FindByIdAsync(user.Id.ToString());
+        user = (await userManager.FindByIdAsync(user.Id.ToString()))!;
         Assert.NotNull(user);
 
         Assert.True(await userManager.IsLockedOutAsync(user));
@@ -76,7 +76,7 @@ public class SecurityTests : IDisposable
         await userManager.ResetAccessFailedCountAsync(user);
         
         // Refresh again
-        user = await userManager.FindByIdAsync(user.Id.ToString());
+        user = (await userManager.FindByIdAsync(user.Id.ToString()))!;
         Assert.NotNull(user);
         Assert.Equal(0, await userManager.GetAccessFailedCountAsync(user));
 
@@ -96,7 +96,7 @@ public class SecurityTests : IDisposable
         await userManager.SetTwoFactorEnabledAsync(user, true);
         Assert.True(await userManager.GetTwoFactorEnabledAsync(user));
 
-        string key = await userManager.GetAuthenticatorKeyAsync(user);
+        string? key = await userManager.GetAuthenticatorKeyAsync(user);
         if (key == null)
         {
             await userManager.ResetAuthenticatorKeyAsync(user);
@@ -105,10 +105,11 @@ public class SecurityTests : IDisposable
         Assert.NotNull(key);
 
         IEnumerable<string>? codes = await userManager.GenerateNewTwoFactorRecoveryCodesAsync(user, 5);
+        Assert.NotNull(codes);
         Assert.Equal(5, codes.Count());
         
         // Refresh to see tokens in memory if they were persisted only to DB
-        user = await userManager.FindByIdAsync(user.Id.ToString());
+        user = (await userManager.FindByIdAsync(user.Id.ToString()))!;
         Assert.NotNull(user);
 
         int count = await userManager.CountRecoveryCodesAsync(user);
@@ -119,7 +120,7 @@ public class SecurityTests : IDisposable
         Assert.True(redeemResult.Succeeded);
 
         // Refresh after redemption
-        user = await userManager.FindByIdAsync(user.Id.ToString());
+        user = (await userManager.FindByIdAsync(user.Id.ToString()))!;
         Assert.NotNull(user);
 
         count = await userManager.CountRecoveryCodesAsync(user);

@@ -53,6 +53,10 @@ public class TKeyTests : IDisposable
         MongoUser? found = await userManager.FindByIdAsync(user.Id.ToString());
         Assert.NotNull(found);
         Assert.Equal(user.Id, found.Id);
+
+        // A malformed id is "not found", not an exception.
+        MongoUser? notFound = await userManager.FindByIdAsync("definitely-not-an-objectid");
+        Assert.Null(notFound);
     }
 
     [Fact]
@@ -77,6 +81,19 @@ public class TKeyTests : IDisposable
         MongoUser<string>? found = await userManager.FindByIdAsync(userId);
         Assert.NotNull(found);
         Assert.Equal(userId, found.Id);
+
+        // Users created without an explicit string Id get a generated one; previously the
+        // second such insert failed on a duplicate null _id.
+        MongoUser<string> firstGenerated = new("autoid1@test.com");
+        result = await userManager.CreateAsync(firstGenerated);
+        Assert.True(result.Succeeded);
+        Assert.False(string.IsNullOrEmpty(firstGenerated.Id));
+
+        MongoUser<string> secondGenerated = new("autoid2@test.com");
+        result = await userManager.CreateAsync(secondGenerated);
+        Assert.True(result.Succeeded);
+        Assert.False(string.IsNullOrEmpty(secondGenerated.Id));
+        Assert.NotEqual(firstGenerated.Id, secondGenerated.Id);
     }
 
     [Fact]

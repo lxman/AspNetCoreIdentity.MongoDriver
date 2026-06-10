@@ -28,8 +28,11 @@ public class ObjectIdConverter : TypeConverter
 
     public override object? ConvertTo(ITypeDescriptorContext? context, CultureInfo? culture, object? value, Type destinationType)
     {
-        return destinationType == typeof(string)
-            ? ((ObjectId)(value ?? new ObjectId())).ToString()
-            : base.ConvertTo(context, culture, value, destinationType);
+        if (destinationType == typeof(string) && value is ObjectId objectId)
+        {
+            return objectId.ToString();
+        }
+
+        return base.ConvertTo(context, culture, value, destinationType);
     }
 }

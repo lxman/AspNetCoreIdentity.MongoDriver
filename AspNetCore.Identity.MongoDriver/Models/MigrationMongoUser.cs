@@ -1,8 +1,10 @@
 ﻿using Microsoft.AspNetCore.Identity;
 using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace AspNetCoreIdentity.MongoDriver.Models;
 
+[BsonIgnoreExtraElements]
 internal class MigrationMongoUser : MigrationMongoUser<ObjectId>
 {
     public MigrationMongoUser() : base()
@@ -10,6 +12,7 @@ internal class MigrationMongoUser : MigrationMongoUser<ObjectId>
     }
 }
 
+[BsonIgnoreExtraElements]
 internal class MigrationMongoUser<TKey> : IdentityUser<TKey> where TKey : IEquatable<TKey>
 {
     public MigrationMongoUser()

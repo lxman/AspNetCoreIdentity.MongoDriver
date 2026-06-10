@@ -1,7 +1,9 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Security.Claims;
 using AspNetCoreIdentity.MongoDriver.Models;
+using AspNetCoreIdentity.MongoDriver.Mongo;
 using Microsoft.AspNetCore.Identity;
+using MongoDB.Bson;
 using MongoDB.Driver;
 
 namespace AspNetCoreIdentity.MongoDriver.Stores;
@@ -23,6 +25,7 @@ public class RoleStore<TRole, TKey> :
     public IQueryable<TRole> Roles => _collection.AsQueryable();
 
     private readonly IMongoCollection<TRole> _collection;
+    private readonly MongoIdentityInitializer? _initializer;
 
     private bool _disposed;
 
@@ -32,8 +35,14 @@ public class RoleStore<TRole, TKey> :
     /// <param name="collection">The role mongo collection.</param>
     /// <param name="describer">The <see cref="IdentityErrorDescriber"/> used to describe store errors.</param>
     public RoleStore(IMongoCollection<TRole> collection, IdentityErrorDescriber? describer)
+        : this(collection, describer, null)
+    {
+    }
+
+    internal RoleStore(IMongoCollection<TRole> collection, IdentityErrorDescriber? describer, MongoIdentityInitializer? initializer)
     {
         _collection = collection;
+        _initializer = initializer;
         ErrorDescriber = describer ?? new IdentityErrorDescriber();
     }
 
@@ -41,8 +50,27 @@ public class RoleStore<TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(role);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
 
-        await _collection.InsertOneAsync(role, cancellationToken: cancellationToken).ConfigureAwait(false);
+        if (typeof(TKey) == typeof(string))
+        {
+            // The driver has no default id generator for string keys, so without this a
+            // second role created without an explicit Id fails on the duplicate null _id.
+            object? rawId = role.Id;
+            if (rawId is null || (rawId is string stringId && stringId.Length == 0))
+            {
+                role.Id = (TKey)(object)ObjectId.GenerateNewId().ToString();
+            }
+        }
+
+        try
+        {
+            await _collection.InsertOneAsync(role, cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            return IdentityResult.Failed(ErrorDescriber.DuplicateRoleName(role.Name ?? string.Empty));
+        }
 
         return IdentityResult.Success;
     }
@@ -51,28 +79,37 @@ public class RoleStore<TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(role);
-        FilterDefinition<TRole>? filter = Builders<TRole>.Filter.Eq(r => r.Id, role.Id);
-        ReplaceOneResult? replaceOneResult = await _collection.ReplaceOneAsync(filter, role, cancellationToken: cancellationToken)
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        // Optimistic concurrency: replace the document only if nobody else updated it since
+        // this instance was loaded, and rotate the stamp so concurrent holders of the old
+        // document fail instead of silently overwriting this update.
+        string? expectedStamp = role.ConcurrencyStamp;
+        role.ConcurrencyStamp = Guid.NewGuid().ToString();
+        FilterDefinition<TRole> filter = Builders<TRole>.Filter.Eq(r => r.Id, role.Id)
+            & Builders<TRole>.Filter.Eq(r => r.ConcurrencyStamp, expectedStamp);
+        ReplaceOneResult result = await _collection.ReplaceOneAsync(filter, role, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        if (replaceOneResult.IsAcknowledged && replaceOneResult.ModifiedCount == 1)
+        if (!result.IsAcknowledged || result.MatchedCount != 1)
         {
-            return IdentityResult.Success;
+            return IdentityResult.Failed(ErrorDescriber.ConcurrencyFailure());
         }
-        return IdentityResult.Failed();
+        return IdentityResult.Success;
     }
 
     public async Task<IdentityResult> DeleteAsync(TRole role, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(role);
-        DeleteResult deleteResult = await _collection
-            .DeleteOneAsync(Builders<TRole>.Filter.Eq(r => r.Id, role.Id), cancellationToken: cancellationToken)
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        FilterDefinition<TRole> filter = Builders<TRole>.Filter.Eq(r => r.Id, role.Id)
+            & Builders<TRole>.Filter.Eq(r => r.ConcurrencyStamp, role.ConcurrencyStamp);
+        DeleteResult result = await _collection.DeleteOneAsync(filter, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
-        if (deleteResult.IsAcknowledged && deleteResult.DeletedCount == 1)
+        if (!result.IsAcknowledged || result.DeletedCount != 1)
         {
-            return IdentityResult.Success;
+            return IdentityResult.Failed(ErrorDescriber.ConcurrencyFailure());
         }
-        return IdentityResult.Failed();
+        return IdentityResult.Success;
     }
 
     public async Task<string> GetRoleIdAsync(TRole role, CancellationToken cancellationToken)
@@ -113,13 +150,18 @@ public class RoleStore<TRole, TKey> :
     public async Task<TRole?> FindByIdAsync(string roleId, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
-        TKey id = (TKey)TypeDescriptor.GetConverter(typeof(TKey)).ConvertFromInvariantString(roleId)!;
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        if (!TryConvertIdFromString(roleId, out TKey id))
+        {
+            return null;
+        }
         return await _collection.Find(r => r.Id.Equals(id)).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TRole?> FindByNameAsync(string normalizedRoleName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         FilterDefinition<TRole>? filter = Builders<TRole>.Filter.Eq(r => r.NormalizedName, normalizedRoleName);
         return await _collection.Find(filter).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
@@ -178,5 +220,39 @@ public class RoleStore<TRole, TKey> :
         token.ThrowIfCancellationRequested();
         ThrowIfDisposed();
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Runs the lazy one-time initialization (migrations and indexes) before an operation
+    /// that touches the database. Purely in-memory operations skip this so they keep working
+    /// while the database is unreachable.
+    /// </summary>
+    private Task EnsureInitializedAsync(CancellationToken token)
+    {
+        return _initializer?.EnsureInitializedAsync(token) ?? Task.CompletedTask;
+    }
+
+    private static bool TryConvertIdFromString(string? id, out TKey key)
+    {
+        key = default!;
+        if (string.IsNullOrEmpty(id))
+        {
+            return false;
+        }
+        try
+        {
+            object? converted = TypeDescriptor.GetConverter(typeof(TKey)).ConvertFromInvariantString(id);
+            if (converted is null)
+            {
+                return false;
+            }
+            key = (TKey)converted;
+            return true;
+        }
+        catch (Exception ex) when (ex is FormatException or OverflowException or NotSupportedException or ArgumentException)
+        {
+            // A malformed id means "no such role", not an exceptional condition.
+            return false;
+        }
     }
 }

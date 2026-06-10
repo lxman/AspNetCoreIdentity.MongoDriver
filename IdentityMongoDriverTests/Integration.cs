@@ -2,6 +2,7 @@
 using AspNetCoreIdentity.MongoDriver.Models;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver.Linq;
 
@@ -211,7 +212,7 @@ public class Integration(GlobalFixture fixture)
         Assert.Null(key);
         result = await _userManager.ResetAuthenticatorKeyAsync(user);
         Assert.True(result.Succeeded);
-        _userManager.RegisterTokenProvider("secret-provider", new DataProtectorTokenProvider<MongoUser<Guid>>(new EphemeralDataProtectionProvider(), new OptionsWrapper<DataProtectionTokenProviderOptions>(new DataProtectionTokenProviderOptions())));
+        _userManager.RegisterTokenProvider("secret-provider", new DataProtectorTokenProvider<MongoUser<Guid>>(new EphemeralDataProtectionProvider(), new OptionsWrapper<DataProtectionTokenProviderOptions>(new DataProtectionTokenProviderOptions()), NullLogger<DataProtectorTokenProvider<MongoUser<Guid>>>.Instance));
         string authenticationToken = await _userManager.GenerateUserTokenAsync(user, "secret-provider", "authentication");
         Assert.NotNull(authenticationToken);
         bool verified = await _userManager.VerifyUserTokenAsync(user, "secret-provider", "authentication", authenticationToken);
@@ -226,8 +227,11 @@ public class Integration(GlobalFixture fixture)
     [Fact]
     public async Task RoleManager_Tests()
     {
-        List<MongoRole<Guid>>? roles = await _roleManager.Roles.ToListAsync();
-        roles.ForEach(r => _roleManager.DeleteAsync(r));
+        List<MongoRole<Guid>> roles = await _roleManager.Roles.ToListAsync();
+        foreach (MongoRole<Guid> existingRole in roles)
+        {
+            await _roleManager.DeleteAsync(existingRole);
+        }
 
         // Create a new role
         MongoRole<Guid> role = new("Administrator");

@@ -1,4 +1,4 @@
-﻿using AspNetCoreIdentity.MongoDriver.Models;
+using AspNetCoreIdentity.MongoDriver.Models;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -6,42 +6,40 @@ namespace AspNetCoreIdentity.MongoDriver.Migrations;
 
 internal abstract class BaseMigration
 {
-    private static List<BaseMigration>? _migrations;
+    private static readonly Lazy<List<BaseMigration>> LazyMigrations = new(BuildMigrations);
 
-    public static List<BaseMigration> Migrations
+    public static List<BaseMigration> Migrations => LazyMigrations.Value;
+
+    private static List<BaseMigration> BuildMigrations()
     {
-        get
+        List<BaseMigration> migrations = typeof(BaseMigration)
+            .Assembly
+            .GetTypes()
+            .Where(t => typeof(BaseMigration).IsAssignableFrom(t))
+            .Select(t => t.GetConstructor(Type.EmptyTypes)?.Invoke(Array.Empty<object>()))
+            .Where(o => o != null)
+            .Cast<BaseMigration>()
+            .OrderBy(m => m.Version)
+            .ToList();
+        if (migrations.Count != migrations.Select(m => m.Version).Distinct().Count())
         {
-            if (_migrations is null)
-            {
-                _migrations = typeof(BaseMigration)
-                    .Assembly
-                    .GetTypes()
-                    .Where(t => typeof(BaseMigration).IsAssignableFrom(t))
-                    .Select(t => t.GetConstructor(Type.EmptyTypes)?.Invoke(Array.Empty<object>()))
-                    .Where(o => o != null)
-                    .Cast<BaseMigration>()
-                    .OrderBy(m => m.Version)
-                    .ToList();
-                if (_migrations.Count != _migrations.Select(m => m.Version).Distinct().Count())
-                {
-                    throw new InvalidOperationException("Migration versions must be unique, please check versions");
-                }
-            }
-
-            return _migrations;
+            throw new InvalidOperationException("Migration versions must be unique, please check versions");
         }
+
+        return migrations;
     }
 
     public abstract int Version { get; }
 
-    public MigrationHistory Apply<TUser, TRole, TKey>(IMongoCollection<TUser> usersCollection,
-        IMongoCollection<TRole> rolesCollection)
+    public async Task<MigrationHistory> ApplyAsync<TUser, TRole, TKey>(
+        IMongoCollection<TUser> usersCollection,
+        IMongoCollection<TRole> rolesCollection,
+        CancellationToken cancellationToken)
         where TKey : IEquatable<TKey>
         where TUser : MigrationMongoUser<TKey>
         where TRole : MongoRole<TKey>
     {
-        DoApply<TUser, TRole, TKey>(usersCollection, rolesCollection);
+        await DoApplyAsync<TUser, TRole, TKey>(usersCollection, rolesCollection, cancellationToken).ConfigureAwait(false);
         return new MigrationHistory
         {
             Id = ObjectId.GenerateNewId(),
@@ -50,8 +48,10 @@ internal abstract class BaseMigration
         };
     }
 
-    protected abstract void DoApply<TUser, TRole, TKey>(
-        IMongoCollection<TUser> usersCollection, IMongoCollection<TRole> rolesCollection)
+    protected abstract Task DoApplyAsync<TUser, TRole, TKey>(
+        IMongoCollection<TUser> usersCollection,
+        IMongoCollection<TRole> rolesCollection,
+        CancellationToken cancellationToken)
         where TKey : IEquatable<TKey>
         where TUser : MigrationMongoUser<TKey>
         where TRole : MongoRole<TKey>;

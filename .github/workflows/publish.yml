@@ -8,7 +8,8 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
+    # Windows so the test suite (Mongo2Go) runs before anything is published.
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -19,14 +20,15 @@ jobs:
 
       - name: Extract version from tag
         id: version
+        shell: bash
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
       - name: Restore
-        run: dotnet restore AspNetCore.Identity.MongoDriver/AspNetCoreIdentity.MongoDriver.csproj
+        run: dotnet restore
 
       - name: Build
         run: >
-          dotnet build AspNetCore.Identity.MongoDriver/AspNetCoreIdentity.MongoDriver.csproj
+          dotnet build
           --configuration Release
           --no-restore
           -p:Version=${{ steps.version.outputs.version }}
@@ -34,6 +36,9 @@ jobs:
           -p:AssemblyVersion=${{ steps.version.outputs.version }}
           -p:ContinuousIntegrationBuild=true
           -p:GeneratePackageOnBuild=false
+
+      - name: Test
+        run: dotnet test --configuration Release --no-build --verbosity normal
 
       - name: Pack
         run: >

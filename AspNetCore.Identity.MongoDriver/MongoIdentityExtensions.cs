@@ -1,11 +1,7 @@
-﻿using AspNetCoreIdentity.MongoDriver.Migrations;
 using AspNetCoreIdentity.MongoDriver.Models;
-using AspNetCoreIdentity.MongoDriver.Mongo;
-using AspNetCoreIdentity.MongoDriver.Stores;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson;
-using MongoDB.Driver;
 
 namespace AspNetCoreIdentity.MongoDriver;
 
@@ -69,7 +65,7 @@ public static class MongoIdentityExtensions
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser, TRole, TKey>(this IServiceCollection services,
-        Action<IdentityOptions> setupIdentityAction, Action<MongoIdentityOptions> setupDatabaseAction, IdentityErrorDescriber identityErrorDescriber = null!)
+        Action<IdentityOptions> setupIdentityAction, Action<MongoIdentityOptions> setupDatabaseAction, IdentityErrorDescriber? identityErrorDescriber = null)
         where TKey : IEquatable<TKey>
         where TUser : MongoUser<TKey>
         where TRole : MongoRole<TKey>
@@ -78,38 +74,12 @@ public static class MongoIdentityExtensions
         MongoIdentityOptions dbOptions = new();
         setupDatabaseAction(dbOptions);
 
-        IMongoCollection<MigrationHistory> migrationCollection = MongoUtil.FromConnectionString<MigrationHistory>(dbOptions, dbOptions.MigrationCollection);
-        IMongoCollection<MigrationMongoUser<TKey>> migrationUserCollection = MongoUtil.FromConnectionString<MigrationMongoUser<TKey>>(dbOptions, dbOptions.UsersCollection);
-        IMongoCollection<TUser> userCollection = MongoUtil.FromConnectionString<TUser>(dbOptions, dbOptions.UsersCollection);
-        IMongoCollection<TRole> roleCollection = MongoUtil.FromConnectionString<TRole>(dbOptions, dbOptions.RolesCollection);
-
-        // apply migrations before identity services resolved
-        if (!dbOptions.DisableAutoMigrations)
-        {
-            Migrator.Apply<MigrationMongoUser<TKey>, TRole, TKey>(
-                migrationCollection, migrationUserCollection, roleCollection);
-        }
-
-        IdentityBuilder? builder = services.AddIdentity<TUser, TRole>(setupIdentityAction);
-
-        builder.AddRoleStore<RoleStore<TRole, TKey>>()
-            .AddUserStore<UserStore<TUser, TRole, TKey>>()
-            .AddUserManager<UserManager<TUser>>()
-            .AddRoleManager<RoleManager<TRole>>()
+        // AddIdentity already registers UserManager, RoleManager, SignInManager and the
+        // related options; only the stores and token providers are added on top of it.
+        IdentityBuilder builder = services.AddIdentity<TUser, TRole>(setupIdentityAction)
             .AddDefaultTokenProviders();
 
-        services.AddSingleton(_ => userCollection);
-        services.AddSingleton(_ => roleCollection);
-
-        // register custom ObjectId TypeConverter
-        if (typeof(TKey) == typeof(ObjectId))
-        {
-            TypeConverterResolver.RegisterTypeConverter<ObjectId, ObjectIdConverter>();
-        }
-
-        // Identity Services
-        services.AddTransient<IRoleStore<TRole>>(_ => new RoleStore<TRole, TKey>(roleCollection, identityErrorDescriber));
-        services.AddTransient<IUserStore<TUser>>(_ => new UserStore<TUser, TRole, TKey>(userCollection, roleCollection, identityErrorDescriber));
+        MongoStoreExtensions.AddStores<TUser, TRole, TKey>(services, dbOptions, identityErrorDescriber);
 
         return builder;
     }

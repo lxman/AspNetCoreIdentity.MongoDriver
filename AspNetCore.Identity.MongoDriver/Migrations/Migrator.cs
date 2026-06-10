@@ -1,36 +1,34 @@
-﻿using System.Runtime.CompilerServices;
 using AspNetCoreIdentity.MongoDriver.Models;
 using MongoDB.Driver;
-
-[assembly: InternalsVisibleTo("Tests")]
 
 namespace AspNetCoreIdentity.MongoDriver.Migrations;
 
 internal static class Migrator
 {
-    //Starting from 4 in case we want to implement migrations for previous versions
-    public static int CurrentVersion = 6;
-
-    public static void Apply<TUser, TRole, TKey>(IMongoCollection<MigrationHistory> migrationCollection,
-        IMongoCollection<TUser> usersCollection, IMongoCollection<TRole> rolesCollection)
+    public static async Task ApplyAsync<TUser, TRole, TKey>(
+        IMongoCollection<MigrationHistory> migrationCollection,
+        IMongoCollection<TUser> usersCollection,
+        IMongoCollection<TRole> rolesCollection,
+        CancellationToken cancellationToken)
         where TKey : IEquatable<TKey>
         where TUser : MigrationMongoUser<TKey>
         where TRole : MongoRole<TKey>
     {
-        int version = migrationCollection
+        int version = await migrationCollection
             .Find(h => true)
             .SortByDescending(h => h.DatabaseVersion)
             .Project(h => h.DatabaseVersion)
-            .FirstOrDefault();
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
 
-        List<MigrationHistory> appliedMigrations = BaseMigration.Migrations
-            .Where(m => m.Version >= version)
-            .Select(migration => migration.Apply<TUser, TRole, TKey>(usersCollection, rolesCollection))
-            .ToList();
-
-        if (appliedMigrations.Count > 0)
+        foreach (BaseMigration migration in BaseMigration.Migrations.Where(m => m.Version >= version))
         {
-            migrationCollection.InsertMany(appliedMigrations);
+            MigrationHistory history = await migration
+                .ApplyAsync<TUser, TRole, TKey>(usersCollection, rolesCollection, cancellationToken)
+                .ConfigureAwait(false);
+            // Record each migration as soon as it completes so a failure part way through
+            // the chain does not re-run the migrations that already succeeded.
+            await migrationCollection.InsertOneAsync(history, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
     }
 }

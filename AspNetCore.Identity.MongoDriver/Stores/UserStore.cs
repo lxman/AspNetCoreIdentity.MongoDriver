@@ -1,7 +1,9 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Security.Claims;
 using AspNetCoreIdentity.MongoDriver.Models;
+using AspNetCoreIdentity.MongoDriver.Mongo;
 using Microsoft.AspNetCore.Identity;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using MongoDB.Driver.Linq;
 
@@ -21,8 +23,7 @@ public class UserStore<TUser, TRole, TKey> :
     IUserLockoutStore<TUser>,
     IUserAuthenticatorKeyStore<TUser>,
     IUserAuthenticationTokenStore<TUser>,
-    IUserTwoFactorRecoveryCodeStore<TUser>,
-    IProtectedUserStore<TUser>
+    IUserTwoFactorRecoveryCodeStore<TUser>
     where TUser : MongoUser<TKey>
     where TRole : MongoRole<TKey>
     where TKey : IEquatable<TKey>
@@ -35,12 +36,13 @@ public class UserStore<TUser, TRole, TKey> :
     /// <summary>
     /// A navigation property for the users that the store contains.
     /// </summary>
-    public IQueryable<TUser> Users => _userCollection.AsQueryable()!;
+    public IQueryable<TUser> Users => _userCollection.AsQueryable();
 
-    public IQueryable<TRole> Roles => _roleCollection.AsQueryable()!;
+    public IQueryable<TRole> Roles => _roleCollection.AsQueryable();
 
     private readonly IMongoCollection<TUser> _userCollection;
     private readonly IMongoCollection<TRole> _roleCollection;
+    private readonly MongoIdentityInitializer? _initializer;
 
     private const string InternalLoginProvider = "[AspNetUserStore]";
     private const string AuthenticatorKeyTokenName = "AuthenticatorKey";
@@ -58,9 +60,19 @@ public class UserStore<TUser, TRole, TKey> :
         IMongoCollection<TUser> userCollection,
         IMongoCollection<TRole> roleCollection,
         IdentityErrorDescriber? describer)
+        : this(userCollection, roleCollection, describer, null)
+    {
+    }
+
+    internal UserStore(
+        IMongoCollection<TUser> userCollection,
+        IMongoCollection<TRole> roleCollection,
+        IdentityErrorDescriber? describer,
+        MongoIdentityInitializer? initializer)
     {
         _userCollection = userCollection;
         _roleCollection = roleCollection;
+        _initializer = initializer;
         ErrorDescriber = describer ?? new IdentityErrorDescriber();
     }
 
@@ -103,7 +115,27 @@ public class UserStore<TUser, TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        await _userCollection.InsertOneAsync(user, new InsertOneOptions(), cancellationToken).ConfigureAwait(false);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        if (typeof(TKey) == typeof(string))
+        {
+            // The driver has no default id generator for string keys, so without this a
+            // second user created without an explicit Id fails on the duplicate null _id.
+            object? rawId = user.Id;
+            if (rawId is null || (rawId is string stringId && stringId.Length == 0))
+            {
+                user.Id = (TKey)(object)ObjectId.GenerateNewId().ToString();
+            }
+        }
+        try
+        {
+            await _userCollection.InsertOneAsync(user, new InsertOneOptions(), cancellationToken).ConfigureAwait(false);
+        }
+        catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            return IdentityResult.Failed(ex.WriteError.Message.Contains(MongoIndexNames.NormalizedEmail, StringComparison.Ordinal)
+                ? ErrorDescriber.DuplicateEmail(user.Email ?? string.Empty)
+                : ErrorDescriber.DuplicateUserName(user.UserName ?? string.Empty));
+        }
         return IdentityResult.Success;
     }
 
@@ -111,37 +143,52 @@ public class UserStore<TUser, TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        ReplaceOneResult? result = await _userCollection.ReplaceOneAsync(u => u.Id.Equals(user.Id), user, new ReplaceOptions(), cancellationToken).ConfigureAwait(false);
-        if (result.IsAcknowledged && result is { IsModifiedCountAvailable: true, ModifiedCount: 1 })
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        // Optimistic concurrency: replace the document only if nobody else updated it since
+        // this instance was loaded, and rotate the stamp so concurrent holders of the old
+        // document fail instead of silently overwriting this update.
+        string? expectedStamp = user.ConcurrencyStamp;
+        user.ConcurrencyStamp = Guid.NewGuid().ToString();
+        FilterDefinition<TUser> filter = Builders<TUser>.Filter.Eq(u => u.Id, user.Id)
+            & Builders<TUser>.Filter.Eq(u => u.ConcurrencyStamp, expectedStamp);
+        ReplaceOneResult result = await _userCollection.ReplaceOneAsync(filter, user, new ReplaceOptions(), cancellationToken).ConfigureAwait(false);
+        if (!result.IsAcknowledged || result.MatchedCount != 1)
         {
-            return IdentityResult.Success;
+            return IdentityResult.Failed(ErrorDescriber.ConcurrencyFailure());
         }
-        return IdentityResult.Failed();
+        return IdentityResult.Success;
     }
 
     public async Task<IdentityResult> DeleteAsync(TUser user, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        FilterDefinition<TUser> filter = Builders<TUser>.Filter.Eq(u => u.Id, user.Id);
-        DeleteResult? deleteResult = await _userCollection.DeleteOneAsync(filter, cancellationToken).ConfigureAwait(false);
-        if ((deleteResult?.IsAcknowledged ?? false) && deleteResult.DeletedCount == 1)
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        FilterDefinition<TUser> filter = Builders<TUser>.Filter.Eq(u => u.Id, user.Id)
+            & Builders<TUser>.Filter.Eq(u => u.ConcurrencyStamp, user.ConcurrencyStamp);
+        DeleteResult result = await _userCollection.DeleteOneAsync(filter, cancellationToken).ConfigureAwait(false);
+        if (!result.IsAcknowledged || result.DeletedCount != 1)
         {
-            return IdentityResult.Success;
+            return IdentityResult.Failed(ErrorDescriber.ConcurrencyFailure());
         }
-        return IdentityResult.Failed();
+        return IdentityResult.Success;
     }
 
     public async Task<TUser?> FindByIdAsync(string userId, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
-        TKey id = (TKey)TypeDescriptor.GetConverter(typeof(TKey)).ConvertFromInvariantString(userId)!;
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        if (!TryConvertIdFromString(userId, out TKey id))
+        {
+            return null;
+        }
         return await _userCollection.Find(u => u.Id.Equals(id)).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<TUser?> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         return await _userCollection.Find(u => u.NormalizedUserName == normalizedUserName).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -171,20 +218,13 @@ public class UserStore<TUser, TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        IdentityUserClaim<string>? existing =
-            user.Claims.FirstOrDefault(c => c.ClaimType == claim.Type && c.ClaimValue == claim.Value);
-        if (existing is not null)
+        // Update every matching claim in place, mirroring the EF store's semantics.
+        foreach (IdentityUserClaim<string> matchedClaim in
+                 user.Claims.Where(c => c.ClaimType == claim.Type && c.ClaimValue == claim.Value))
         {
-            user.Claims.Remove(existing);
+            matchedClaim.ClaimType = newClaim.Type;
+            matchedClaim.ClaimValue = newClaim.Value;
         }
-
-        IdentityUserClaim<string> toInsert = new()
-        {
-            UserId = user.Id.ToString()!,
-            Id = existing?.Id ?? 0
-        };
-        toInsert.InitializeFromClaim(newClaim);
-        user.Claims.Add(toInsert);
     }
 
     public async Task RemoveClaimsAsync(TUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
@@ -193,18 +233,14 @@ public class UserStore<TUser, TRole, TKey> :
         ArgumentNullException.ThrowIfNull(user);
         foreach (Claim claim in claims)
         {
-            IdentityUserClaim<string>? matching =
-                user.Claims.FirstOrDefault(c => c.ClaimValue == claim.Value && c.ClaimType == claim.Type);
-            if (matching is not null)
-            {
-                user.Claims.Remove(matching);
-            }
+            user.Claims.RemoveAll(c => c.ClaimType == claim.Type && c.ClaimValue == claim.Value);
         }
     }
 
     public async Task<IList<TUser>> GetUsersForClaimAsync(Claim claim, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         return await _userCollection
             .AsQueryable()
             .Where(u => u.Claims.Any(c => c.ClaimType == claim.Type && c.ClaimValue == claim.Value))
@@ -238,35 +274,38 @@ public class UserStore<TUser, TRole, TKey> :
     public async Task<TUser?> FindByLoginAsync(string loginProvider, string providerKey, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         return await _userCollection.Find(u => u.Logins.Any(l => l.LoginProvider == loginProvider && l.ProviderKey == providerKey))
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
     }
 
-    public async Task AddToRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
+    public async Task AddToRoleAsync(TUser user, string normalizedRoleName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        TRole? role = await _roleCollection.Find(r => r.NormalizedName == roleName.ToUpperInvariant())
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        TRole? role = await _roleCollection.Find(r => r.NormalizedName == normalizedRoleName)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
         if (role is null)
         {
-            throw new InvalidOperationException($"Role {roleName} not found.");
+            throw new InvalidOperationException($"Role {normalizedRoleName} not found.");
         }
         user.Roles.Add(role.Id);
     }
 
-    public async Task RemoveFromRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
+    public async Task RemoveFromRoleAsync(TUser user, string normalizedRoleName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        TRole? role = await _roleCollection.Find(r => r.NormalizedName == roleName.ToUpperInvariant())
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        TRole? role = await _roleCollection.Find(r => r.NormalizedName == normalizedRoleName)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
         if (role is null)
         {
-            throw new InvalidOperationException($"Role {roleName} not found.");
+            throw new InvalidOperationException($"Role {normalizedRoleName} not found.");
         }
 
         user.Roles.Remove(role.Id);
@@ -276,34 +315,35 @@ public class UserStore<TUser, TRole, TKey> :
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        List<string> roleNames = [];
-        foreach (TKey roleId in user.Roles)
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        if (user.Roles.Count == 0)
         {
-            TRole? role = await _roleCollection.Find(r => r.Id.Equals(roleId))
-                .FirstOrDefaultAsync(cancellationToken)
-                .ConfigureAwait(false);
-            if (role?.Name != null)
-            {
-                roleNames.Add(role.Name);
-            }
+            return new List<string>();
         }
-        return roleNames;
+        FilterDefinition<TRole> filter = Builders<TRole>.Filter.In(r => r.Id, user.Roles);
+        List<string?> roleNames = await _roleCollection.Find(filter)
+            .Project(r => r.Name)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+        return roleNames.OfType<string>().ToList();
     }
 
-    public async Task<bool> IsInRoleAsync(TUser user, string roleName, CancellationToken cancellationToken)
+    public async Task<bool> IsInRoleAsync(TUser user, string normalizedRoleName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
         ArgumentNullException.ThrowIfNull(user);
-        TRole? role = await _roleCollection.Find(r => r.NormalizedName == roleName.ToUpperInvariant())
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        TRole? role = await _roleCollection.Find(r => r.NormalizedName == normalizedRoleName)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
         return role != null && user.Roles.Contains(role.Id);
     }
 
-    public async Task<IList<TUser>> GetUsersInRoleAsync(string roleName, CancellationToken cancellationToken)
+    public async Task<IList<TUser>> GetUsersInRoleAsync(string normalizedRoleName, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
-        TRole? role = await _roleCollection.Find(r => r.NormalizedName == roleName.ToUpperInvariant())
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
+        TRole? role = await _roleCollection.Find(r => r.NormalizedName == normalizedRoleName)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -383,6 +423,7 @@ public class UserStore<TUser, TRole, TKey> :
     public async Task<TUser?> FindByEmailAsync(string normalizedEmail, CancellationToken cancellationToken)
     {
         await PreambleAsync(cancellationToken);
+        await EnsureInitializedAsync(cancellationToken).ConfigureAwait(false);
         return await _userCollection.Find(u => u.NormalizedEmail == normalizedEmail).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -513,20 +554,17 @@ public class UserStore<TUser, TRole, TKey> :
         IdentityUserToken<string>? existingToken = user.Tokens.FirstOrDefault(t => t.LoginProvider == loginProvider && t.Name == name);
         if (existingToken is null)
         {
-            IdentityUserToken<string> newToken = new()
+            user.Tokens.Add(new IdentityUserToken<string>
             {
                 UserId = user.Id.ToString()!,
                 LoginProvider = loginProvider,
                 Name = name,
                 Value = value
-            };
-            user.Tokens.Add(newToken);
+            });
         }
         else
         {
             existingToken.Value = value;
-            int idx = user.Tokens.FindIndex(t => t.LoginProvider == loginProvider && t.Name == name);
-            user.Tokens[idx] = existingToken;
         }
     }
 
@@ -614,5 +652,39 @@ public class UserStore<TUser, TRole, TKey> :
         token.ThrowIfCancellationRequested();
         ThrowIfDisposed();
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Runs the lazy one-time initialization (migrations and indexes) before an operation
+    /// that touches the database. Purely in-memory operations skip this so they keep working
+    /// while the database is unreachable.
+    /// </summary>
+    private Task EnsureInitializedAsync(CancellationToken token)
+    {
+        return _initializer?.EnsureInitializedAsync(token) ?? Task.CompletedTask;
+    }
+
+    private static bool TryConvertIdFromString(string? id, out TKey key)
+    {
+        key = default!;
+        if (string.IsNullOrEmpty(id))
+        {
+            return false;
+        }
+        try
+        {
+            object? converted = TypeDescriptor.GetConverter(typeof(TKey)).ConvertFromInvariantString(id);
+            if (converted is null)
+            {
+                return false;
+            }
+            key = (TKey)converted;
+            return true;
+        }
+        catch (Exception ex) when (ex is FormatException or OverflowException or NotSupportedException or ArgumentException)
+        {
+            // A malformed id means "no such user", not an exceptional condition.
+            return false;
+        }
     }
 }

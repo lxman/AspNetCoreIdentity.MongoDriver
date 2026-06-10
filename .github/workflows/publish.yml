@@ -51,6 +51,9 @@ jobs:
           --output ./artifacts
 
       - name: Push to NuGet
+        # bash so the wildcard expands before dotnet sees it; pwsh passes it through
+        # literally and NuGet's own globbing fails on ./-prefixed paths on Windows.
+        shell: bash
         run: >
           dotnet nuget push ./artifacts/*.nupkg
           --api-key ${{ secrets.NUGET_API_KEY }}

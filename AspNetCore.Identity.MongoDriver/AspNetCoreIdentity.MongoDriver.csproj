@@ -6,11 +6,12 @@
     <Nullable>enable</Nullable>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Title>AspNetCoreIdentity.MongoDriver</Title>
-    <Description>A mongodb provisioner for AspNetCore.Identity</Description>
+    <Description>MongoDB store provider for ASP.NET Core Identity built on the official MongoDB.Driver. Generic key types, optimistic concurrency via ConcurrencyStamp, distributed-lock schema migrations, and automatic index creation. Targets .NET 8.</Description>
     <PackageProjectUrl>https://github.com/lxman/AspNetCoreIdentity.MongoDriver</PackageProjectUrl>
-    <PackageTags>mongo;identity;aspnetcore</PackageTags>
+    <PackageTags>mongo;mongodb;identity;aspnetcore;aspnetcore-identity;userstore;rolestore;authentication;dotnet;net8</PackageTags>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <RepositoryUrl>https://github.com/lxman/AspNetCoreIdentity.MongoDriver</RepositoryUrl>
   </PropertyGroup>
 
@@ -28,6 +29,10 @@
       <PackagePath>\</PackagePath>
     </None>
     <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="icon.png">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>

@@ -10,21 +10,21 @@ public static class MongoIdentityExtensions
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser>(this IServiceCollection services)
         where TUser : MongoUser
     {
-        return AddIdentityMongoDbProvider<TUser, MongoRole, ObjectId>(services, _ => { });
+        return services.AddIdentityMongoDbProvider<TUser, MongoRole, ObjectId>(_ => { });
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser, TKey>(this IServiceCollection services)
         where TKey : IEquatable<TKey>
         where TUser : MongoUser<TKey>
     {
-        return AddIdentityMongoDbProvider<TUser, MongoRole<TKey>, TKey>(services, _ => { });
+        return services.AddIdentityMongoDbProvider<TUser, MongoRole<TKey>, TKey>(_ => { });
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser>(this IServiceCollection services,
         Action<MongoIdentityOptions> setupDatabaseAction)
         where TUser : MongoUser
     {
-        return AddIdentityMongoDbProvider<TUser, MongoRole, ObjectId>(services, setupDatabaseAction);
+        return services.AddIdentityMongoDbProvider<TUser, MongoRole, ObjectId>(setupDatabaseAction);
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser, TKey>(this IServiceCollection services,
@@ -32,7 +32,7 @@ public static class MongoIdentityExtensions
         where TKey : IEquatable<TKey>
         where TUser : MongoUser<TKey>
     {
-        return AddIdentityMongoDbProvider<TUser, MongoRole<TKey>, TKey>(services, setupDatabaseAction);
+        return services.AddIdentityMongoDbProvider<TUser, MongoRole<TKey>, TKey>(setupDatabaseAction);
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser, TRole>(this IServiceCollection services,
@@ -40,7 +40,7 @@ public static class MongoIdentityExtensions
         where TUser : MongoUser
         where TRole : MongoRole
     {
-        return AddIdentityMongoDbProvider<TUser, TRole, ObjectId>(services, setupIdentityAction, setupDatabaseAction);
+        return services.AddIdentityMongoDbProvider<TUser, TRole, ObjectId>(setupIdentityAction, setupDatabaseAction);
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser, TRole, TKey>(this IServiceCollection services,
@@ -49,19 +49,19 @@ public static class MongoIdentityExtensions
         where TUser : MongoUser<TKey>
         where TRole : MongoRole<TKey>
     {
-        return AddIdentityMongoDbProvider<TUser, TRole, TKey>(services, _ => { }, setupDatabaseAction);
+        return services.AddIdentityMongoDbProvider<TUser, TRole, TKey>(_ => { }, setupDatabaseAction);
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider(this IServiceCollection services,
         Action<IdentityOptions> setupIdentityAction, Action<MongoIdentityOptions> setupDatabaseAction)
     {
-        return AddIdentityMongoDbProvider<MongoUser, MongoRole, ObjectId>(services, setupIdentityAction, setupDatabaseAction);
+        return services.AddIdentityMongoDbProvider<MongoUser, MongoRole, ObjectId>(setupIdentityAction, setupDatabaseAction);
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser>(this IServiceCollection services,
         Action<IdentityOptions> setupIdentityAction, Action<MongoIdentityOptions> setupDatabaseAction) where TUser : MongoUser
     {
-        return AddIdentityMongoDbProvider<TUser, MongoRole, ObjectId>(services, setupIdentityAction, setupDatabaseAction);
+        return services.AddIdentityMongoDbProvider<TUser, MongoRole, ObjectId>(setupIdentityAction, setupDatabaseAction);
     }
 
     public static IdentityBuilder AddIdentityMongoDbProvider<TUser, TRole, TKey>(this IServiceCollection services,

@@ -227,7 +227,7 @@ public class Integration(GlobalFixture fixture)
     [Fact]
     public async Task RoleManager_Tests()
     {
-        List<MongoRole<Guid>> roles = await _roleManager.Roles.ToListAsync();
+        List<MongoRole<Guid>> roles = await _roleManager.Roles.ToListAsync(TestContext.Current.CancellationToken);
         foreach (MongoRole<Guid> existingRole in roles)
         {
             await _roleManager.DeleteAsync(existingRole);

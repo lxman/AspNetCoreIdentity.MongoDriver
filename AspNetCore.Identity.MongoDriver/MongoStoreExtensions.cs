@@ -15,7 +15,7 @@ public static class MongoStoreExtensions
         IdentityErrorDescriber? identityErrorDescriber = null)
         where TUser : MongoUser
     {
-        return AddMongoDbStores<TUser, MongoRole, ObjectId>(builder, setupDatabaseAction, identityErrorDescriber);
+        return builder.AddMongoDbStores<TUser, MongoRole, ObjectId>(setupDatabaseAction, identityErrorDescriber);
     }
 
     public static IdentityBuilder AddMongoDbStores<TUser, TRole, TKey>(this IdentityBuilder builder,

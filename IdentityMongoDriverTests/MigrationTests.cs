@@ -44,12 +44,12 @@ public class MigrationTests : IDisposable
             UserName = "test",
             AuthenticatorKey = "OLD_KEY"
         };
-        await usersCollection.InsertOneAsync(user);
+        await usersCollection.InsertOneAsync(user, cancellationToken: TestContext.Current.CancellationToken);
 
         Schema4Migration migration = new();
-        await migration.ApplyAsync<MigrationMongoUser<Guid>, MongoRole<Guid>, Guid>(usersCollection, rolesCollection, CancellationToken.None);
+        await migration.ApplyAsync<MigrationMongoUser<Guid>, MongoRole<Guid>, Guid>(usersCollection, rolesCollection, TestContext.Current.CancellationToken);
 
-        MigrationMongoUser<Guid>? updatedUser = await usersCollection.Find(u => u.Id == userId).FirstOrDefaultAsync();
+        MigrationMongoUser<Guid>? updatedUser = await usersCollection.Find(u => u.Id == userId).FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         Assert.NotNull(updatedUser);
         Assert.Null(updatedUser.AuthenticatorKey);
         Assert.Contains(updatedUser.Tokens, t => t.Name == "AuthenticatorKey" && t.Value == "OLD_KEY" && t.LoginProvider == "[AspNetUserStore]");
@@ -71,14 +71,14 @@ public class MigrationTests : IDisposable
             { "UserName", "test5" },
             { "AuthenticatorKey", "SOME_KEY" },
             { "RecoveryCodes", new BsonArray { new BsonDocument { { "Code", "123" }, { "Redeemed", false } } } }
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Schema5Migration migration = new();
-        await migration.ApplyAsync<MigrationMongoUser<Guid>, MongoRole<Guid>, Guid>(usersCollection, rolesCollection, CancellationToken.None);
+        await migration.ApplyAsync<MigrationMongoUser<Guid>, MongoRole<Guid>, Guid>(usersCollection, rolesCollection, TestContext.Current.CancellationToken);
 
         BsonDocument? doc = await db.GetCollection<BsonDocument>("Users")
             .Find(Builders<BsonDocument>.Filter.Eq("_id", userId))
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         Assert.NotNull(doc);
         Assert.False(doc.Contains("AuthenticatorKey"));
         Assert.False(doc.Contains("RecoveryCodes"));
@@ -98,7 +98,7 @@ public class MigrationTests : IDisposable
             { "_id", new BsonBinaryData(roleId, GuidRepresentation.Standard) },
             { "Name", "Administrator" },
             { "NormalizedName", "ADMINISTRATOR" }
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         // A legacy (pre-id-based) user document: role membership stored as name strings,
         // including one referencing a role that no longer exists.
@@ -108,15 +108,15 @@ public class MigrationTests : IDisposable
             { "_id", new BsonBinaryData(userId, GuidRepresentation.Standard) },
             { "UserName", "test6" },
             { "Roles", new BsonArray { "ADMINISTRATOR", "GHOST_ROLE" } }
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Schema6Migration migration = new();
-        await migration.ApplyAsync<MigrationMongoUser<Guid>, MongoRole<Guid>, Guid>(usersCollection, rolesCollection, CancellationToken.None);
+        await migration.ApplyAsync<MigrationMongoUser<Guid>, MongoRole<Guid>, Guid>(usersCollection, rolesCollection, TestContext.Current.CancellationToken);
 
         // The migrated document must deserialize into the current model with the role id.
         MongoUser<Guid>? migratedUser = await db.GetCollection<MongoUser<Guid>>("Users")
             .Find(u => u.Id == userId)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         Assert.NotNull(migratedUser);
         Guid convertedRoleId = Assert.Single(migratedUser.Roles);
         Assert.Equal(roleId, convertedRoleId);
@@ -136,7 +136,7 @@ public class MigrationTests : IDisposable
             { "_id", new BsonBinaryData(roleId, GuidRepresentation.Standard) },
             { "Name", "Administrator" },
             { "NormalizedName", "ADMINISTRATOR" }
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Guid userId = Guid.NewGuid();
         await db.GetCollection<BsonDocument>("Users").InsertOneAsync(new BsonDocument
@@ -144,14 +144,14 @@ public class MigrationTests : IDisposable
             { "_id", new BsonBinaryData(userId, GuidRepresentation.Standard) },
             { "UserName", "test6b" },
             { "Roles", new BsonArray { new BsonBinaryData(roleId, GuidRepresentation.Standard) } }
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
 
         Schema6Migration migration = new();
-        await migration.ApplyAsync<MigrationMongoUser<Guid>, MongoRole<Guid>, Guid>(usersCollection, rolesCollection, CancellationToken.None);
+        await migration.ApplyAsync<MigrationMongoUser<Guid>, MongoRole<Guid>, Guid>(usersCollection, rolesCollection, TestContext.Current.CancellationToken);
 
         MongoUser<Guid>? migratedUser = await db.GetCollection<MongoUser<Guid>>("Users")
             .Find(u => u.Id == userId)
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(TestContext.Current.CancellationToken);
         Assert.NotNull(migratedUser);
         Guid keptRoleId = Assert.Single(migratedUser.Roles);
         Assert.Equal(roleId, keptRoleId);

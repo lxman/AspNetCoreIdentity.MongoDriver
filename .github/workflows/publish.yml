@@ -16,7 +16,10 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.0.x
+          # .NET 10 SDK runs MTP; .NET 8 runs the net8.0 tests.
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Extract version from tag
         id: version

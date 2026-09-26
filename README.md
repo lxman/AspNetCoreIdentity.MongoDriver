@@ -72,3 +72,25 @@ user/role and retry.
 `options.Stores.ProtectPersonalData` is not supported: the store does not encrypt personal
 data at rest, and enabling that option will throw at runtime by design rather than silently
 storing data unprotected.
+
+## Building and testing
+
+Install the .NET 10 SDK and .NET 8 SDK (which supplies the .NET 8 and ASP.NET Core
+runtimes needed by the tests). `global.json` selects the latest installed stable
+.NET 10 SDK feature band and enables Microsoft.Testing.Platform for `dotnet test`.
+The library and tests target `net8.0`.
+
+Run these commands from the repository root:
+
+```shell
+dotnet restore
+dotnet build --configuration Release --no-restore
+dotnet test --configuration Release --no-build --verbosity normal
+```
+
+CI runs on Windows because the integration tests use Mongo2Go to launch MongoDB.
+To select the test project explicitly, use
+`dotnet test --project IdentityMongoDriverTests/IdentityMongoDriverTests.csproj`.
+MTP uses xUnit filters such as `--filter-class` rather than VSTest's `--filter`.
+The retained VSTest adapter and Coverlet collector support VSTest-based IDE tooling;
+the collector does not provide coverage for MTP runs.

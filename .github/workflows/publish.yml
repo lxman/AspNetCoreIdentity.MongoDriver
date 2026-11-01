@@ -6,6 +6,10 @@ on:
       - 'v*.*.*'
       - 'v*.*.*.*'
 
+permissions:
+  contents: read
+  id-token: write
+
 jobs:
   publish:
     # Windows so the test suite (Mongo2Go) runs before anything is published.
@@ -53,12 +57,18 @@ jobs:
           -p:AssemblyVersion=${{ steps.version.outputs.version }}
           --output ./artifacts
 
+      - name: Login to NuGet (Trusted Publishing)
+        id: nuget-login
+        uses: NuGet/login@v1
+        with:
+          user: lxmanget
+
       - name: Push to NuGet
         # bash so the wildcard expands before dotnet sees it; pwsh passes it through
         # literally and NuGet's own globbing fails on ./-prefixed paths on Windows.
         shell: bash
         run: >
           dotnet nuget push ./artifacts/*.nupkg
-          --api-key ${{ secrets.NUGET_API_KEY }}
+          --api-key ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
